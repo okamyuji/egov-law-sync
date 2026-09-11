@@ -3,6 +3,8 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/okamyuji/egov-law-sync/internal/domain/law"
@@ -93,5 +95,23 @@ func TestWeeklyDoesNotBundleWhenNothingRepaired(t *testing.T) {
 	res, _ := NewWeeklyChecker(f.deps()).Run(context.Background(), WeeklyOptions{ReleaseTag: "w", XMLDir: t.TempDir(), ZipPath: "bin/laws-xml.zip"})
 	if res.ExitCode != 0 || len(f.bundler.calls) != 0 {
 		t.Fatalf("calls=%+v", f.bundler.calls)
+	}
+}
+
+func TestWeeklyWarnsWhenXMLFailuresExceedThreshold(t *testing.T) {
+	f := newFakes()
+	for i := range 21 {
+		id := law.RevisionID(fmt.Sprintf("R%03d", i))
+		f.repo.laws = append(f.repo.laws, law.Law{ID: law.LawID(fmt.Sprintf("L%03d", i)), RevisionID: id, RepealStatus: "None"})
+		f.repo.xml[id] = law.XMLRecord{RevisionID: id, SHA256: "cur"}
+		f.bulk.sha[id] = "zip-old"
+		f.xml.errs[id] = errors.New("503")
+	}
+	res, err := NewWeeklyChecker(f.deps()).Run(context.Background(), WeeklyOptions{ReleaseTag: "t", XMLDir: t.TempDir()})
+	if err != nil || res.ExitCode != 0 {
+		t.Fatalf("res=%+v err=%v", res, err)
+	}
+	if res.Record.Counts["xml_failed"] != 21 || !slices.Contains(res.Record.Warnings, "xml_failures") {
+		t.Fatalf("counts=%v warnings=%v", res.Record.Counts, res.Record.Warnings)
 	}
 }

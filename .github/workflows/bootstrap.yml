@@ -27,6 +27,7 @@ jobs:
       - id: run
         run: |
           set +e
+          touch bin/run-start
           bin/egov-law-sync bootstrap --release-tag "${{ steps.tag.outputs.tag }}" --xml-dir bin/xml
           echo "code=$?" >> "$GITHUB_OUTPUT"
       - name: release
@@ -46,3 +47,6 @@ jobs:
       - name: issue
         if: ${{ !cancelled() && steps.labels.outcome == 'success' }}
         run: bash tools/issue.sh "${{ steps.run.outputs.code }}" manifest/runs/bootstrap "${{ job.status }}"
+      - name: fail on unexpected exit code
+        if: ${{ !cancelled() && steps.run.outputs.code != '0' && steps.run.outputs.code != '3' }}
+        run: exit 1

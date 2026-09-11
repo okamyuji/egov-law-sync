@@ -3,6 +3,7 @@ package application
 import (
 	"cmp"
 	"context"
+	"log"
 	"slices"
 	"time"
 
@@ -52,6 +53,36 @@ func saveRun(d Deps, rec RunRecord, start time.Time, code int) (Result, error) {
 	return Result{ExitCode: code, Record: rec}, nil
 }
 
+// maxFetchLogLines 1回の実行でstderrに出す取得失敗の行数。原因の把握には先頭だけで足り、全件出すとログが読めなくなる
+const maxFetchLogLines = 10
+
+// fetchLog 取得失敗の原因をstderrへ出す。1回の実行で1つ作る
+type fetchLog struct {
+	n int
+}
+
+// add 失敗を1件記録する。上限を超えた分は件数だけ数える
+func (f *fetchLog) add(kind, id string, err error) {
+	f.n++
+	if f.n <= maxFetchLogLines {
+		log.Printf("%s fetch failed: %s: %v", kind, id, err)
+	}
+}
+
+// flush 出さなかった件数を1行にまとめる。実行の終わりに必ず呼ぶ
+func (f *fetchLog) flush() {
+	if f.n > maxFetchLogLines {
+		log.Printf("...and %d more fetch errors", f.n-maxFetchLogLines)
+	}
+}
+
+// warnXMLFailures 本文取得の失敗が閾値を超えたら警告にする
+func warnXMLFailures(d Deps, rec *RunRecord) {
+	if rec.Counts["xml_failed"] > d.Threshold.MaxFetchFailures {
+		addWarning(rec, "xml_failures")
+	}
+}
+
 // addWarning 同じ理由を重ねて書かない
 func addWarning(rec *RunRecord, w string) {
 	if !slices.Contains(rec.Warnings, w) {
@@ -59,13 +90,18 @@ func addWarning(rec *RunRecord, w string) {
 	}
 }
 
-// fetchRevisions targetsの/law_revisionsを引いてdstにマージする。失敗はpending_law_idsに残して次回に引き直す
-func fetchRevisions(ctx context.Context, src RevisionSource, targets []law.LawID, dst map[law.RevisionID]law.Revision, today law.Date, rec *RunRecord) {
+// fetchRevisions targetsの/law_revisionsを引いてdstにマージする。失敗はpending_law_idsに残して次回に引き直す。404の法令はAPIから消えているので引き直さない
+func fetchRevisions(ctx context.Context, src RevisionSource, targets []law.LawID, dst map[law.RevisionID]law.Revision, today law.Date, rec *RunRecord, lg *fetchLog) {
 	for _, id := range targets {
-		fetched, err := src.Revisions(ctx, id)
+		fetched, found, err := src.Revisions(ctx, id)
 		if err != nil {
 			rec.PendingLawIDs = append(rec.PendingLawIDs, id)
 			addWarning(rec, "revision_fetch_failed")
+			lg.add("revision", string(id), err)
+			continue
+		}
+		if !found {
+			rec.Counts["revision_gone"]++
 			continue
 		}
 		for _, r := range fetched {
@@ -80,11 +116,12 @@ func fetchRevisions(ctx context.Context, src RevisionSource, targets []law.LawID
 
 type xmlOutcome struct {
 	rec law.XMLRecord
-	ok  bool
+	id  law.RevisionID
+	err error
 }
 
 // applyXML targetsの本文を取ってindexを置き換え、取得できた分を返す
-func applyXML(ctx context.Context, d Deps, targets []law.Law, dir, tag string, index map[law.RevisionID]law.XMLRecord, rec *RunRecord) []law.XMLRecord {
+func applyXML(ctx context.Context, d Deps, targets []law.Law, dir, tag string, index map[law.RevisionID]law.XMLRecord, rec *RunRecord, lg *fetchLog) []law.XMLRecord {
 	fetched := make([]law.XMLRecord, 0, len(targets))
 	if len(targets) == 0 {
 		return fetched
@@ -97,16 +134,18 @@ func applyXML(ctx context.Context, d Deps, targets []law.Law, dir, tag string, i
 			defer func() { <-sem }()
 			sum, n, err := d.XML.FetchXML(ctx, t.RevisionID, dir)
 			if err != nil {
-				out <- xmlOutcome{}
+				out <- xmlOutcome{id: t.RevisionID, err: err}
 				return
 			}
-			out <- xmlOutcome{rec: law.XMLRecord{RevisionID: t.RevisionID, Updated: t.Updated, SHA256: sum, Bytes: n, ReleaseTag: tag}, ok: true}
+			out <- xmlOutcome{rec: law.XMLRecord{RevisionID: t.RevisionID, Updated: t.Updated, SHA256: sum, Bytes: n, ReleaseTag: tag}, id: t.RevisionID}
 		}(t)
 	}
 	for range targets {
 		o := <-out
-		if !o.ok {
+		if o.err != nil {
 			rec.Counts["xml_failed"]++
+			// 記録側に排他を持たせていないので、取得のgoroutineからではなくこの直列ループで記録する
+			lg.add("xml", string(o.id), o.err)
 			continue
 		}
 		fetched = append(fetched, o.rec)

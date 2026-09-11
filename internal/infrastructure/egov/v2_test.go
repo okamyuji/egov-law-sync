@@ -86,8 +86,72 @@ func TestRevisionsSkipsNothingAndMapsFields(t *testing.T) {
 		w.Write([]byte(`{"law_info":{"law_id":"A"},"revisions":[{"law_revision_id":"A_1","law_title":"t","updated":"u","amendment_enforcement_date":"2020-01-01","amendment_promulgate_date":"2019-12-01","amendment_law_num":"n","current_revision_status":"CurrentEnforced"}]}`))
 	}))
 	defer srv.Close()
-	revs, err := New(srv.URL, "", "").Revisions(context.Background(), "A")
-	if err != nil || len(revs) != 1 || revs[0].ID != "A_1" || revs[0].LawID != "A" || revs[0].Status != "CurrentEnforced" {
-		t.Fatalf("revs=%+v err=%v", revs, err)
+	revs, found, err := New(srv.URL, "", "").Revisions(context.Background(), "A")
+	if err != nil || !found || len(revs) != 1 || revs[0].ID != "A_1" || revs[0].LawID != "A" || revs[0].Status != "CurrentEnforced" {
+		t.Fatalf("revs=%+v found=%v err=%v", revs, found, err)
+	}
+}
+
+func TestListAllRejectsInvalidIDs(t *testing.T) {
+	cases := map[string]string{
+		"law_id":      `{"total_count":1,"count":1,"laws":[{"law_info":{"law_id":"../x","law_type":"Act"},"revision_info":{"law_revision_id":"A_1","law_title":"a","updated":"u","amendment_enforcement_date":"2020-01-01","repeal_status":"None"}}]}`,
+		"revision_id": `{"total_count":1,"count":1,"laws":[{"law_info":{"law_id":"A","law_type":"Act"},"revision_info":{"law_revision_id":"a/b","law_title":"a","updated":"u","amendment_enforcement_date":"2020-01-01","repeal_status":"None"}}]}`,
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Write([]byte(body))
+			}))
+			defer srv.Close()
+			if _, _, err := New(srv.URL, "", "").ListAll(context.Background(), ""); err == nil {
+				t.Fatal("want an error for an ID with a path separator")
+			}
+		})
+	}
+}
+
+func TestRevisionsRejectsInvalidRevisionID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(`{"revisions":[{"law_revision_id":"../x","law_title":"t","updated":"u"}]}`))
+	}))
+	defer srv.Close()
+	if _, _, err := New(srv.URL, "", "").Revisions(context.Background(), "A"); err == nil {
+		t.Fatal("want an error for an ID with a path separator")
+	}
+}
+
+func TestRevisionsEscapesIDInPath(t *testing.T) {
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.URL.EscapedPath()
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+	if _, _, err := New(srv.URL, "", "").Revisions(context.Background(), "a/b"); err != nil {
+		t.Fatal(err)
+	}
+	if got != "/law_revisions/a%2Fb" {
+		t.Fatalf("path=%q", got)
+	}
+}
+
+func TestRevisionsTreats404AsGone(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+	revs, found, err := New(srv.URL, "", "").Revisions(context.Background(), "A")
+	if err != nil || found || revs != nil {
+		t.Fatalf("revs=%+v found=%v err=%v", revs, found, err)
+	}
+}
+
+func TestListAll404StaysAnError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+	if _, _, err := New(srv.URL, "", "").ListAll(context.Background(), ""); err == nil {
+		t.Fatal("404 on /laws must stay an error")
 	}
 }

@@ -34,6 +34,8 @@ func NewBootstrapper(d Deps) Bootstrapper {
 func (b *bootstrapper) Run(ctx context.Context, o BootstrapOptions) (Result, error) {
 	start := b.d.Clock.Now()
 	rec := newRecord("bootstrap", start)
+	lg := &fetchLog{}
+	defer lg.flush()
 
 	laws, total, err := b.d.Catalog.ListAll(ctx, "")
 	if err != nil {
@@ -54,9 +56,9 @@ func (b *bootstrapper) Run(ctx context.Context, o BootstrapOptions) (Result, err
 	if err != nil {
 		return Result{}, err
 	}
-	fetchRevisions(ctx, b.d.Revisions, targets, revisions, law.DateOf(start), &rec)
+	fetchRevisions(ctx, b.d.Revisions, targets, revisions, law.DateOf(start), &rec, lg)
 
-	index, fetched, err := b.collectXML(ctx, laws, o, &rec)
+	index, fetched, err := b.collectXML(ctx, laws, o, &rec, lg)
 	if err != nil {
 		return Result{}, err
 	}
@@ -92,7 +94,7 @@ func (b *bootstrapper) futureTargets(ctx context.Context, laws []law.Law) ([]law
 }
 
 // collectXML ReleaseTagが空なら取得もxml_index.csvの読み込みもしない
-func (b *bootstrapper) collectXML(ctx context.Context, laws []law.Law, o BootstrapOptions, rec *RunRecord) (map[law.RevisionID]law.XMLRecord, []law.XMLRecord, error) {
+func (b *bootstrapper) collectXML(ctx context.Context, laws []law.Law, o BootstrapOptions, rec *RunRecord, lg *fetchLog) (map[law.RevisionID]law.XMLRecord, []law.XMLRecord, error) {
 	if o.ReleaseTag == "" {
 		return nil, nil, nil
 	}
@@ -100,7 +102,9 @@ func (b *bootstrapper) collectXML(ctx context.Context, laws []law.Law, o Bootstr
 	if err != nil {
 		return nil, nil, err
 	}
-	return index, applyXML(ctx, b.d, laws, o.XMLDir, o.ReleaseTag, index, rec), nil
+	fetched := applyXML(ctx, b.d, laws, o.XMLDir, o.ReleaseTag, index, rec, lg)
+	warnXMLFailures(b.d, rec)
+	return index, fetched, nil
 }
 
 func (b *bootstrapper) persist(laws []law.Law, revisions map[law.RevisionID]law.Revision, index map[law.RevisionID]law.XMLRecord, fetched []law.XMLRecord, o BootstrapOptions, rec RunRecord, start time.Time) (Result, error) {

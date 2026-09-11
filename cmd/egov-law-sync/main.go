@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strconv"
 
@@ -35,6 +36,8 @@ Flags (dailyのみ):
 `
 
 func main() {
+	// 実行の記録はruns/のJSONが持つので、stderrには時刻を付けない
+	log.SetFlags(0)
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
 

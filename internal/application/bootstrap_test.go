@@ -3,6 +3,8 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/okamyuji/egov-law-sync/internal/domain/law"
@@ -131,5 +133,32 @@ func TestBootstrapBundlesFetchedXML(t *testing.T) {
 	index := f.bundler.calls[0].index
 	if len(index) != 2 || index[0].RevisionID != "A_1" || index[1].RevisionID != "B_1" {
 		t.Fatalf("index must be sorted by revision_id: %+v", index)
+	}
+}
+
+func TestBootstrapWarnsWhenXMLFailuresExceedThreshold(t *testing.T) {
+	f := newFakes()
+	for i := range 21 {
+		id := law.LawID(fmt.Sprintf("L%03d", i))
+		f.catalog.current = append(f.catalog.current, law.Law{ID: id, RevisionID: law.RevisionID(string(id) + "_1")})
+	}
+	res, err := NewBootstrapper(f.deps()).Run(context.Background(), BootstrapOptions{ReleaseTag: "t", XMLDir: t.TempDir()})
+	if err != nil || res.ExitCode != 0 {
+		t.Fatalf("res=%+v err=%v", res, err)
+	}
+	if res.Record.Counts["xml_failed"] != 21 || !slices.Contains(res.Record.Warnings, "xml_failures") {
+		t.Fatalf("counts=%v warnings=%v", res.Record.Counts, res.Record.Warnings)
+	}
+}
+
+func TestBootstrapDoesNotWarnAtThreshold(t *testing.T) {
+	f := newFakes()
+	for i := range 20 {
+		id := law.LawID(fmt.Sprintf("L%03d", i))
+		f.catalog.current = append(f.catalog.current, law.Law{ID: id, RevisionID: law.RevisionID(string(id) + "_1")})
+	}
+	res, _ := NewBootstrapper(f.deps()).Run(context.Background(), BootstrapOptions{ReleaseTag: "t", XMLDir: t.TempDir()})
+	if len(res.Record.Warnings) != 0 {
+		t.Fatalf("warnings=%v", res.Record.Warnings)
 	}
 }

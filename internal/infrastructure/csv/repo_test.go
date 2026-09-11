@@ -121,3 +121,54 @@ func TestSaveRunRejectsBadStartedAt(t *testing.T) {
 		t.Fatal("want error for unparsable started_at")
 	}
 }
+
+func TestLoadRejectsInvalidIDs(t *testing.T) {
+	cases := []struct {
+		name string
+		file string
+		body string
+		load func(*Repo) error
+	}{
+		{
+			name: "laws.csvのlaw_id",
+			file: "laws.csv",
+			body: "law_id,law_type,law_title,revision_id,updated,enforcement_date,repeal_status\n../x,Act,t,A_1,u,2020-01-01,None\n",
+			load: func(r *Repo) error { _, err := r.LoadLaws(); return err },
+		},
+		{
+			name: "laws.csvのrevision_id",
+			file: "laws.csv",
+			body: "law_id,law_type,law_title,revision_id,updated,enforcement_date,repeal_status\nA,Act,t,a/b,u,2020-01-01,None\n",
+			load: func(r *Repo) error { _, err := r.LoadLaws(); return err },
+		},
+		{
+			name: "revisions.csvのrevision_id",
+			file: "revisions.csv",
+			body: "revision_id,law_id,law_title,enforcement_date,promulgate_date,amendment_law_num,status,updated,first_seen\na/b,A,t,,,,CurrentEnforced,u,2026-09-11\n",
+			load: func(r *Repo) error { _, err := r.LoadRevisions(); return err },
+		},
+		{
+			name: "revisions.csvのlaw_id",
+			file: "revisions.csv",
+			body: "revision_id,law_id,law_title,enforcement_date,promulgate_date,amendment_law_num,status,updated,first_seen\nA_1,../x,t,,,,CurrentEnforced,u,2026-09-11\n",
+			load: func(r *Repo) error { _, err := r.LoadRevisions(); return err },
+		},
+		{
+			name: "xml_index.csvのrevision_id",
+			file: "xml_index.csv",
+			body: "revision_id,updated,sha256,xml_bytes,release_tag\n../x,u,s,1,t1\n",
+			load: func(r *Repo) error { _, err := r.LoadXMLIndex(); return err },
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := New(t.TempDir())
+			if err := os.WriteFile(filepath.Join(r.dir, c.file), []byte(c.body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := c.load(r); err == nil {
+				t.Fatal("want an error for an ID with a path separator")
+			}
+		})
+	}
+}

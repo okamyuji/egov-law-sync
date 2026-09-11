@@ -42,15 +42,19 @@ func (f *fakeCatalog) ListAll(_ context.Context, asof string) ([]law.Law, int, e
 type fakeRevisions struct {
 	byLaw map[law.LawID][]law.Revision
 	errs  map[law.LawID]error
+	gone  map[law.LawID]bool
 	calls map[law.LawID]int
 }
 
-func (f *fakeRevisions) Revisions(_ context.Context, id law.LawID) ([]law.Revision, error) {
+func (f *fakeRevisions) Revisions(_ context.Context, id law.LawID) ([]law.Revision, bool, error) {
 	f.calls[id]++
 	if err := f.errs[id]; err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return f.byLaw[id], nil
+	if f.gone[id] {
+		return nil, false, nil
+	}
+	return f.byLaw[id], true, nil
 }
 
 type fakeXML struct {
@@ -253,7 +257,7 @@ type fakes struct {
 func newFakes() *fakes {
 	return &fakes{
 		catalog:   &fakeCatalog{},
-		revisions: &fakeRevisions{byLaw: map[law.LawID][]law.Revision{}, errs: map[law.LawID]error{}, calls: map[law.LawID]int{}},
+		revisions: &fakeRevisions{byLaw: map[law.LawID][]law.Revision{}, errs: map[law.LawID]error{}, gone: map[law.LawID]bool{}, calls: map[law.LawID]int{}},
 		xml:       &fakeXML{sha: map[law.RevisionID]string{}, errs: map[law.RevisionID]error{}},
 		updates:   &fakeUpdates{byDate: map[string][]law.LawID{}},
 		daily:     &fakeDailyArchive{dirs: map[string][]string{}},

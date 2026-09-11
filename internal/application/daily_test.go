@@ -310,3 +310,31 @@ func TestDailyBundleErrorIsWarningOnly(t *testing.T) {
 		t.Fatalf("warnings=%v", res.Record.Warnings)
 	}
 }
+
+func TestDailyRejectsUnparsableStoredDates(t *testing.T) {
+	cases := []struct {
+		name string
+		set  func(*fakes)
+	}{
+		{"適用済み日次のto", func(f *fakes) {
+			f.repo.lastApplied = &RunRecord{Kind: "daily", To: "", Applied: true, TotalCount: 1}
+		}},
+		{"bootstrapのdate_jst", func(f *fakes) {
+			f.repo.bootstrap = &RunRecord{Kind: "bootstrap", DateJST: "2026-9-1", TotalCount: 1, Applied: true}
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := newFakes()
+			f.clock.now = time.Date(2026, 9, 12, 0, 0, 0, 0, law.JST)
+			c.set(f)
+			res, err := NewDailySyncer(f.deps()).Run(context.Background(), DailyOptions{})
+			if err == nil {
+				t.Fatalf("want an error for an unparsable stored date, res=%+v", res)
+			}
+			if len(f.updates.calls) != 0 {
+				t.Fatalf("must not enumerate a range, calls=%d", len(f.updates.calls))
+			}
+		})
+	}
+}

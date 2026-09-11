@@ -25,21 +25,33 @@ func (Bundler) Bundle(xmlDir, outPath string, index []law.XMLRecord) error {
 	if err != nil {
 		return err
 	}
-	w := zip.NewWriter(f)
-	if err := writeXMLEntries(w, xmlDir, index); err == nil {
-		err = writeIndexEntry(w, index)
-	}
-	if cerr := w.Close(); err == nil {
+	err = writeEntries(f, xmlDir, index)
+	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
-	if cerr := f.Close(); err == nil {
+	if err != nil {
+		// 途中まで書いたzipが残ると、ワークフローのrelease手順がそれをそのままReleaseに添付する
+		_ = os.Remove(outPath)
+	}
+	return err
+}
+
+// writeEntries fへzipの中身を書き、zip.Writerを閉じる
+func writeEntries(f *os.File, xmlDir string, index []law.XMLRecord) error {
+	w := zip.NewWriter(f)
+	written, err := writeXMLEntries(w, xmlDir, index)
+	if err == nil {
+		err = writeIndexEntry(w, written)
+	}
+	if cerr := w.Close(); err == nil {
 		err = cerr
 	}
 	return err
 }
 
-// writeXMLEntries xmlDir内に存在する<rev>.xmlをzipに平坦に格納する
-func writeXMLEntries(w *zip.Writer, xmlDir string, index []law.XMLRecord) error {
+// writeXMLEntries xmlDir内に存在する<rev>.xmlをzipに平坦に格納し、格納できた記録を返す
+func writeXMLEntries(w *zip.Writer, xmlDir string, index []law.XMLRecord) ([]law.XMLRecord, error) {
+	written := make([]law.XMLRecord, 0, len(index))
 	for _, rec := range index {
 		name := string(rec.RevisionID) + ".xml"
 		body, err := os.ReadFile(filepath.Join(xmlDir, name))
@@ -47,17 +59,18 @@ func writeXMLEntries(w *zip.Writer, xmlDir string, index []law.XMLRecord) error 
 			continue
 		}
 		if err != nil {
-			return err
+			return nil, err
 		}
 		e, err := w.CreateHeader(&zip.FileHeader{Name: name, Method: zip.Deflate})
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if _, err := e.Write(body); err != nil {
-			return err
+			return nil, err
 		}
+		written = append(written, rec)
 	}
-	return nil
+	return written, nil
 }
 
 // writeIndexEntry revision_id,sha256,xml_bytesのindex.csvをzipに格納する

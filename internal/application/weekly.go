@@ -30,6 +30,8 @@ func NewWeeklyChecker(d Deps) WeeklyChecker {
 func (w *weeklyChecker) Run(ctx context.Context, o WeeklyOptions) (Result, error) {
 	start := w.d.Clock.Now()
 	rec := newRecord("weekly", start)
+	lg := &fetchLog{}
+	defer lg.flush()
 
 	laws, err := w.d.Repo.LoadLaws()
 	if err != nil {
@@ -51,7 +53,8 @@ func (w *weeklyChecker) Run(ctx context.Context, o WeeklyOptions) (Result, error
 	}
 	countZipOnly(archive, laws, &rec)
 	if o.ReleaseTag != "" {
-		fetched := w.repair(ctx, mismatched, index, o, &rec)
+		fetched := w.repair(ctx, mismatched, index, o, &rec, lg)
+		warnXMLFailures(w.d, &rec)
 		if err := w.d.Repo.SaveXMLIndex(index); err != nil {
 			return Result{}, err
 		}
@@ -98,12 +101,13 @@ func countZipOnly(archive Archive, laws []law.Law, rec *RunRecord) {
 }
 
 // repair 手順3。取り直したsha256が今の値と同じならzipが古いだけなので件数だけ数える
-func (w *weeklyChecker) repair(ctx context.Context, mismatched []law.Law, index map[law.RevisionID]law.XMLRecord, o WeeklyOptions, rec *RunRecord) []law.XMLRecord {
+func (w *weeklyChecker) repair(ctx context.Context, mismatched []law.Law, index map[law.RevisionID]law.XMLRecord, o WeeklyOptions, rec *RunRecord, lg *fetchLog) []law.XMLRecord {
 	fetched := make([]law.XMLRecord, 0, len(mismatched))
 	for _, l := range mismatched {
 		sum, n, err := w.d.XML.FetchXML(ctx, l.RevisionID, o.XMLDir)
 		if err != nil {
 			rec.Counts["xml_failed"]++
+			lg.add("xml", string(l.RevisionID), err)
 			continue
 		}
 		if sum == index[l.RevisionID].SHA256 {

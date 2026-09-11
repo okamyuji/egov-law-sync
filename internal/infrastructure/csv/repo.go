@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
@@ -93,6 +94,9 @@ func (r *Repo) LoadLaws() ([]law.Law, error) {
 		if len(row) != len(lawsHeader) {
 			return nil, errors.New("csv: laws.csv row has wrong column count")
 		}
+		if !law.ValidID(row[0]) || !law.ValidID(row[3]) {
+			return nil, fmt.Errorf("csv: laws.csv has an unusable id: law_id=%q revision_id=%q", row[0], row[3])
+		}
 		laws = append(laws, law.Law{
 			ID:              law.LawID(row[0]),
 			Type:            row[1],
@@ -130,6 +134,9 @@ func (r *Repo) LoadRevisions() (map[law.RevisionID]law.Revision, error) {
 	for _, row := range rows {
 		if len(row) != len(revisionsHeader) {
 			return nil, errors.New("csv: revisions.csv row has wrong column count")
+		}
+		if !law.ValidID(row[0]) || !law.ValidID(row[1]) {
+			return nil, fmt.Errorf("csv: revisions.csv has an unusable id: revision_id=%q law_id=%q", row[0], row[1])
 		}
 		rev := law.Revision{
 			ID:              law.RevisionID(row[0]),
@@ -171,6 +178,9 @@ func (r *Repo) LoadXMLIndex() (map[law.RevisionID]law.XMLRecord, error) {
 	for _, row := range rows {
 		if len(row) != len(xmlIndexHeader) {
 			return nil, errors.New("csv: xml_index.csv row has wrong column count")
+		}
+		if !law.ValidID(row[0]) {
+			return nil, fmt.Errorf("csv: xml_index.csv has an unusable revision_id: %q", row[0])
 		}
 		n, err := strconv.ParseInt(row[3], 10, 64)
 		if err != nil {

@@ -13,9 +13,9 @@ type LawCatalog interface {
 	ListAll(ctx context.Context, asof string) (laws []law.Law, total int, err error)
 }
 
-// RevisionSource /law_revisionsの取得
+// RevisionSource /law_revisionsの取得。404はfound=false、errなし。それ以外の失敗はerr
 type RevisionSource interface {
-	Revisions(ctx context.Context, id law.LawID) ([]law.Revision, error)
+	Revisions(ctx context.Context, id law.LawID) (revs []law.Revision, found bool, err error)
 }
 
 // XMLSource dirに<revision_id>.xmlとして保存し、sha256とバイト数を返す

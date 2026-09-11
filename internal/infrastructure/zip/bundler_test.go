@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/okamyuji/egov-law-sync/internal/domain/law"
@@ -56,6 +57,31 @@ func TestBundleSkipsMissingXML(t *testing.T) {
 	if !names["index.csv"] {
 		t.Fatal("index.csv must always be bundled")
 	}
+	if strings.Contains(readEntry(t, r, "index.csv"), "MISSING") {
+		t.Fatal("index.csv must not list a file that is absent from the zip")
+	}
+}
+
+// readEntry zip内の1エントリを文字列で読む
+func readEntry(t *testing.T, r *archivezip.ReadCloser, name string) string {
+	t.Helper()
+	for _, f := range r.File {
+		if f.Name != name {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rc.Close()
+		body, err := io.ReadAll(rc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(body)
+	}
+	t.Fatalf("%s not found", name)
+	return ""
 }
 
 func TestBundleWritesIndexCSVRows(t *testing.T) {
@@ -91,5 +117,20 @@ func TestBundleWritesIndexCSVRows(t *testing.T) {
 	want := "revision_id,sha256,xml_bytes\nA_1,deadbeef,4\n"
 	if string(body) != want {
 		t.Fatalf("body=%q want=%q", body, want)
+	}
+}
+
+func TestBundleRemovesZipOnError(t *testing.T) {
+	dir := t.TempDir()
+	// <rev>.xmlをディレクトリにするとos.ReadFileはEISDIRを返す。IsNotExistで飛ばされる経路と区別できる
+	if err := os.Mkdir(filepath.Join(dir, "A_1.xml"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(t.TempDir(), "laws-xml.zip")
+	if err := (Bundler{}).Bundle(dir, out, []law.XMLRecord{{RevisionID: "A_1"}}); err == nil {
+		t.Fatal("want an error when an xml file cannot be read")
+	}
+	if _, err := os.Stat(out); !os.IsNotExist(err) {
+		t.Fatalf("truncated zip must be removed, stat err=%v", err)
 	}
 }

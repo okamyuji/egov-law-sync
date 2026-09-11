@@ -20,6 +20,9 @@ var ErrNoBaseline = errors.New("application: no bootstrap or applied daily run")
 // ErrInvalidRange --fromが--toより後で、対象日の範囲にならない
 var ErrInvalidRange = errors.New("application: from is after to")
 
+// ErrInvalidStoredDate runs/の日付が壊れている。そのまま起点にすると対象日の範囲が数十万日に広がる
+var ErrInvalidStoredDate = errors.New("application: stored date in runs/ is not YYYY-MM-DD")
+
 // DailyOptions 日次の実行時オプション。FromとToが空なら自動で決める
 type DailyOptions struct {
 	From, To   law.Date
@@ -57,6 +60,8 @@ func (r dailyRange) empty() bool {
 func (s *dailySyncer) Run(ctx context.Context, o DailyOptions) (Result, error) {
 	start := s.d.Clock.Now()
 	rec := newRecord("daily", start)
+	lg := &fetchLog{}
+	defer lg.flush()
 	rg, err := s.resolveRange(o)
 	if err != nil {
 		return Result{}, err
@@ -90,13 +95,13 @@ func (s *dailySyncer) Run(ctx context.Context, o DailyOptions) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	fetchRevisions(ctx, s.d.Revisions, targets, revisions, law.DateOf(start), &rec)
+	fetchRevisions(ctx, s.d.Revisions, targets, revisions, law.DateOf(start), &rec, lg)
 
 	rec.Counts["unexpected"] = sync.CountUnexpected(changes, known)
 	if as := sync.CheckAnomalies(rec.Counts["unexpected"], rg.prevTotal, total, s.d.Threshold, o.Force); len(as) > 0 {
 		return s.abort(rec, start, as, targets)
 	}
-	return s.apply(ctx, cur, revisions, o, rec, start, changes)
+	return s.apply(ctx, cur, revisions, o, rec, start, changes, lg)
 }
 
 // resolveRange 開始は前回適用済みのtoの翌日、無ければ最新bootstrapの実行日
@@ -107,8 +112,12 @@ func (s *dailySyncer) resolveRange(o DailyOptions) (dailyRange, error) {
 		return rg, err
 	}
 	if ok {
-		rg.prevTo = law.Date(applied.To)
-		rg.from = rg.prevTo.Add(1)
+		prevTo, err := law.ParseDate(applied.To)
+		if err != nil {
+			return rg, ErrInvalidStoredDate
+		}
+		rg.prevTo = prevTo
+		rg.from = prevTo.Add(1)
 		rg.prevTotal = applied.TotalCount
 	} else {
 		bs, found, err := s.d.Repo.LastBootstrap()
@@ -118,8 +127,12 @@ func (s *dailySyncer) resolveRange(o DailyOptions) (dailyRange, error) {
 		if !found {
 			return rg, ErrNoBaseline
 		}
-		rg.from = law.Date(bs.DateJST)
-		rg.prevTo = rg.from
+		from, err := law.ParseDate(bs.DateJST)
+		if err != nil {
+			return rg, ErrInvalidStoredDate
+		}
+		rg.from = from
+		rg.prevTo = from
 		rg.prevTotal = bs.TotalCount
 	}
 	rg.to = law.DateOf(s.d.Clock.Now()).Add(-1)
@@ -274,7 +287,7 @@ func (s *dailySyncer) abort(rec RunRecord, start time.Time, as []sync.Anomaly, t
 }
 
 // apply 手順6から8。ReleaseTagが空なら本文取得とxml_index.csvの書き込みを飛ばす
-func (s *dailySyncer) apply(ctx context.Context, cur []law.Law, revisions map[law.RevisionID]law.Revision, o DailyOptions, rec RunRecord, start time.Time, changes []sync.Change) (Result, error) {
+func (s *dailySyncer) apply(ctx context.Context, cur []law.Law, revisions map[law.RevisionID]law.Revision, o DailyOptions, rec RunRecord, start time.Time, changes []sync.Change, lg *fetchLog) (Result, error) {
 	var index map[law.RevisionID]law.XMLRecord
 	var fetched []law.XMLRecord
 	if o.ReleaseTag != "" {
@@ -283,10 +296,8 @@ func (s *dailySyncer) apply(ctx context.Context, cur []law.Law, revisions map[la
 			return Result{}, err
 		}
 		index = loaded
-		fetched = applyXML(ctx, s.d, sync.XMLTargets(cur, index), o.XMLDir, o.ReleaseTag, index, &rec)
-		if rec.Counts["xml_failed"] > s.d.Threshold.MaxFetchFailures {
-			addWarning(&rec, "xml_failures")
-		}
+		fetched = applyXML(ctx, s.d, sync.XMLTargets(cur, index), o.XMLDir, o.ReleaseTag, index, &rec, lg)
+		warnXMLFailures(s.d, &rec)
 	}
 	if err := s.d.Repo.SaveLaws(cur); err != nil {
 		return Result{}, err

@@ -142,6 +142,29 @@ bin/egov-law-sync daily --from 2026-09-09 --to 2026-09-10           # 範囲の�
 bin/egov-law-sync weekly                                            # sec1 zipとxml_index.csvを照合する
 ```
 
+共通のオプションは`--release-tag`、`--xml-dir`（既定値`bin/xml`）、`--zip-path`（既定値`bin/laws-xml.zip`）です。`daily`はさらに`--from`、`--to`、`--force`を受け取ります。
+
+終了コードは4つです。
+
+| コード | 意味 |
+|---|---|
+| 0 | 正常に終わりました。警告があればruns/のJSONに入ります |
+| 3 | 異常判定に該当しました。3つのCSVは書き換わりません |
+| 2 | 使い方の誤りです。サブコマンドが無い、未知のサブコマンド、未知のフラグのときに返します |
+| 1 | それ以外のエラーです。HTTPの失敗が再試行後も続く場合とファイルの読み書きの失敗が該当します |
+
+環境変数で接続先と動作を変えられます。
+
+| 環境変数 | 既定値 | 用途 |
+|---|---|---|
+| `EGOV_V2_BASE` | `https://laws.e-gov.go.jp/api/2` | API v2のベースURL |
+| `EGOV_V1_BASE` | `https://elaws.e-gov.go.jp/api/1` | API v1のベースURL |
+| `EGOV_BULK_BASE` | `https://laws.e-gov.go.jp` | bulkdownloadのベースURL |
+| `EGOV_CONCURRENCY` | `1` | 本文取得の並列度 |
+| `EGOV_MANIFEST_DIR` | `manifest` | 3つのCSVとruns/の置き場所 |
+
+再試行後も失敗した取得は、原因をstderrに出します。出すのは1回の実行で先頭10件までで、残りは件数を1行にまとめたものです。
+
 ローカルで実行した場合、`--release-tag`が空なので本文XMLの取得は行われず、laws.csv、revisions.csv、runs/だけが書き換わります。ローカル実行の結果はcommitしないでください。runs/をcommitすると次回のActionsの対象日がずれます。commitとReleaseの作成はGitHub Actionsのワークフローが行います。
 
 GitHub Actionsでは`bootstrap.yml`を手動で1回起動し、その後は`daily.yml`が毎日07:00 JSTに、`weekly.yml`が毎週日曜08:00 JSTに動きます。正常時は3つのCSVを自動commitし、異常判定に該当した日はCSVを変えずにラベル`anomaly`のIssueを作ります。人が内容を確認したうえで適用する場合は、`daily.yml`を手動起動して`--force`を渡します。CIは`okamyuji/reusable-workflows@v1`のGo CIとsecurity-scanに加えて、`make doclint`、`make e2e`、`make crap`、`make mutate`を実行します。

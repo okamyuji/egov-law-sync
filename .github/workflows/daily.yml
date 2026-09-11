@@ -40,6 +40,7 @@ jobs:
           [ -n "$FROM" ] && args+=(--from "$FROM")
           [ -n "$TO" ] && args+=(--to "$TO")
           [ "$FORCE" = "true" ] && args+=(--force)
+          touch bin/run-start
           bin/egov-law-sync "${args[@]}"
           echo "code=$?" >> "$GITHUB_OUTPUT"
       - name: release
@@ -59,3 +60,6 @@ jobs:
       - name: issue
         if: ${{ !cancelled() && steps.labels.outcome == 'success' }}
         run: bash tools/issue.sh "${{ steps.run.outputs.code }}" manifest/runs/daily "${{ job.status }}"
+      - name: fail on unexpected exit code
+        if: ${{ !cancelled() && steps.run.outputs.code != '0' && steps.run.outputs.code != '3' }}
+        run: exit 1
