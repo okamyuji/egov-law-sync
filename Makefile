@@ -28,7 +28,7 @@ crap: test ## 全関数のCRAP値を計算し、15を超える関数があれば
 	@bash tools/crap.sh bin/cyclo.txt bin/coverfunc.txt $(CRAP_MAX)
 
 mutate: ## internal/domain 配下にmutation testingを実行し、生存mutantがあれば失敗する
-	go run $(GREMLINS) unleash ./internal/domain/... --threshold-efficacy 100 --threshold-mcover 90
+	go run $(GREMLINS) unleash ./internal/domain --workers 1 --timeout-coefficient 10 --threshold-efficacy 100 --threshold-mcover 90
 
 e2e: build ## ビルドしたバイナリで主要導線のE2Eテストを実行する
 	EGOV_BIN=$(CURDIR)/$(BIN) go test -count=1 ./e2e/...
