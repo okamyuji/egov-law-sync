@@ -92,3 +92,10 @@ func TestEachRoundTripsRenderedChunks(t *testing.T) {
 		}
 	}
 }
+
+func TestEachRejectsMissingDir(t *testing.T) {
+	err := JSONL{}.Each(filepath.Join(t.TempDir(), "missing"), func(law.Chunk) error { return nil })
+	if err == nil {
+		t.Fatal("missing dir must be an error")
+	}
+}

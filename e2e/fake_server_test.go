@@ -280,6 +280,11 @@ func writeZip(w http.ResponseWriter, entries map[string][]byte) {
 	_, _ = w.Write(buf.Bytes())
 }
 
+// lawXML Convertが読める最小構成の法令XMLを組み立てる
+func lawXML(title, text string) []byte {
+	return []byte(`<?xml version="1.0" encoding="UTF-8"?><Law Era="Reiwa" Lang="ja" LawType="Act" Num="1" Year="8"><LawNum>令和八年法律第一号</LawNum><LawBody><LawTitle>` + title + `</LawTitle><MainProvision><Article Num="1"><ArticleTitle>第一条</ArticleTitle><Paragraph Num="1"><ParagraphNum/><ParagraphSentence><Sentence>` + text + `</Sentence></ParagraphSentence></Paragraph></Article></MainProvision></LawBody></Law>`)
+}
+
 // expandDate YYYYMMDDをYYYY-MM-DDにする。長さが違えば空文字（どの設定にも一致しないのでnot foundになる）
 func expandDate(compact string) law.Date {
 	if len(compact) != 8 {
