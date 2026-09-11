@@ -114,13 +114,6 @@ func (s *fakeServer) setV1(d law.Date, ids []law.LawID) {
 	s.v1Found[d] = ids
 }
 
-// setSec3 その日のsec3 zipのディレクトリ一覧を設定する。未設定の日は500を返す
-func (s *fakeServer) setSec3(d law.Date, dirs []string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.sec3Found[d] = dirs
-}
-
 func (s *fakeServer) start() *httptest.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/laws", s.handleLaws)
@@ -285,6 +278,11 @@ func writeZip(w http.ResponseWriter, entries map[string][]byte) {
 	}
 	_ = zw.Close()
 	_, _ = w.Write(buf.Bytes())
+}
+
+// lawXML Convertが読める最小構成の法令XMLを組み立てる
+func lawXML(title, text string) []byte {
+	return []byte(`<?xml version="1.0" encoding="UTF-8"?><Law Era="Reiwa" Lang="ja" LawType="Act" Num="1" Year="8"><LawNum>令和八年法律第一号</LawNum><LawBody><LawTitle>` + title + `</LawTitle><MainProvision><Article Num="1"><ArticleTitle>第一条</ArticleTitle><Paragraph Num="1"><ParagraphNum/><ParagraphSentence><Sentence>` + text + `</Sentence></ParagraphSentence></Paragraph></Article></MainProvision></LawBody></Law>`)
 }
 
 // expandDate YYYYMMDDをYYYY-MM-DDにする。長さが違えば空文字（どの設定にも一致しないのでnot foundになる）

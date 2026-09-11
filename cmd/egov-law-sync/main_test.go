@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -22,10 +25,31 @@ func TestParseBootstrapDefaults(t *testing.T) {
 	}
 }
 
+func TestParseTextFlags(t *testing.T) {
+	o, err := parseDaily([]string{"--text-dir", "out/text", "--text-zip-path", "out/t.zip"})
+	if err != nil || o.TextDir != "out/text" || o.TextZipPath != "out/t.zip" {
+		t.Fatalf("o=%+v err=%v", o, err)
+	}
+	b, err := parseBootstrap(nil)
+	if err != nil || b.TextDir != "bin/text" || b.TextZipPath != "bin/laws-text.zip" {
+		t.Fatalf("defaults %+v err=%v", b, err)
+	}
+}
+
 func TestParseWeeklyFlags(t *testing.T) {
 	o, err := parseWeekly([]string{"--release-tag", "sync-2", "--xml-dir", "x", "--zip-path", "z"})
 	if err != nil || o.ReleaseTag != "sync-2" || o.XMLDir != "x" || o.ZipPath != "z" {
 		t.Fatalf("o=%+v err=%v", o, err)
+	}
+}
+
+func TestParseIngest(t *testing.T) {
+	o, err := parseIngest([]string{"out/text"})
+	if err != nil || o.TextDir != "out/text" {
+		t.Fatalf("o=%+v err=%v", o, err)
+	}
+	if _, err := parseIngest(nil); err == nil {
+		t.Fatal("missing dir must fail")
 	}
 }
 
@@ -47,5 +71,17 @@ func TestRunNoArgs(t *testing.T) {
 	var stdout, stderr strings.Builder
 	if code := run(nil, &stdout, &stderr); code != 2 || stderr.Len() == 0 {
 		t.Fatalf("code=%d stderr=%s", code, stderr.String())
+	}
+}
+
+func TestINV11RunIngestBrokenLineExits1(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "A.jsonl"), []byte("{broken\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("EGOV_MANIFEST_DIR", filepath.Join(dir, "manifest"))
+	var out, errb bytes.Buffer
+	if code := run([]string{"ingest", dir}, &out, &errb); code != 1 || !strings.Contains(errb.String(), "A.jsonl:1") {
+		t.Fatalf("code=%d stderr=%q", code, errb.String())
 	}
 }

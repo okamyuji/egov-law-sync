@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# pre-commit: scripts/quality-gate.sh をそのまま実行する。make install-hooks で有効になる
+exec bash "$(git rev-parse --show-toplevel)/scripts/quality-gate.sh"

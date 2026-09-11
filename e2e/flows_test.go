@@ -1,15 +1,19 @@
 package e2e
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,7 +37,7 @@ func runCLI(t *testing.T, env map[string]string, args ...string) (code int, stdo
 	if bin == "" {
 		t.Fatal("EGOV_BIN is not set; run via make e2e")
 	}
-	cmd := exec.Command(bin, args...)
+	cmd := exec.CommandContext(t.Context(), bin, args...)
 	cmd.Env = os.Environ()
 	for k, v := range env {
 		cmd.Env = append(cmd.Env, k+"="+v)
@@ -43,8 +47,7 @@ func runCLI(t *testing.T, env map[string]string, args ...string) (code int, stdo
 	cmd.Stderr = &errBuf
 	err := cmd.Run()
 	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			return exitErr.ExitCode(), outBuf.String(), errBuf.String()
 		}
 		t.Fatalf("run %v: %v", args, err)
@@ -126,18 +129,21 @@ func TestBootstrapFlow(t *testing.T) {
 		{LawRevisionID: "C_1", LawTitle: "title-C", Updated: "u1", AmendmentEnforcementDate: "2020-01-01", CurrentRevisionStatus: "CurrentEnforced"},
 		{LawRevisionID: "C_2", LawTitle: "title-C", Updated: "u2", AmendmentEnforcementDate: "2030-01-01", CurrentRevisionStatus: "UnEnforced"},
 	})
-	srv.setXML("A_1", []byte("<Law A_1/>"))
-	srv.setXML("B_1", []byte("<Law B_1/>"))
-	srv.setXML("C_1", []byte("<Law C_1/>"))
+	srv.setXML("A_1", lawXML("title-A", "本文A"))
+	srv.setXML("B_1", lawXML("title-B", "本文B"))
+	srv.setXML("C_1", lawXML("title-C", "本文C"))
 	ts := srv.start()
 	defer ts.Close()
 
 	manifestDir := t.TempDir()
 	xmlDir := filepath.Join(t.TempDir(), "xml")
 	zipPath := filepath.Join(t.TempDir(), "laws.zip")
+	work := t.TempDir()
+	textZip := filepath.Join(work, "laws-text.zip")
 
 	code, _, stderr := runCLI(t, baseEnv(ts.URL, manifestDir),
-		"bootstrap", "--release-tag", "t1", "--xml-dir", xmlDir, "--zip-path", zipPath)
+		"bootstrap", "--release-tag", "t1", "--xml-dir", xmlDir, "--zip-path", zipPath,
+		"--text-dir", filepath.Join(work, "text"), "--text-zip-path", textZip)
 	if code != 0 {
 		t.Fatalf("exit=%d stderr=%s", code, stderr)
 	}
@@ -165,6 +171,92 @@ func TestBootstrapFlow(t *testing.T) {
 	if err != nil || len(entries) != 3 {
 		t.Fatalf("xmlDir entries=%v err=%v", entries, err)
 	}
+	assertTextZip(t, textZip)
+	rec := lastRun(t, manifestDir, "bootstrap")
+	if rec.Counts["text_ok"] != 3 || rec.Counts["text_failed"] != 0 {
+		t.Fatalf("text counts = %v", rec.Counts)
+	}
+}
+
+// assertTextZip INV-5（jsonlの各行が正しいChunk）とINV-6（index.csvのchunks列がjsonl行数と一致し、
+// 索引済みのrevisionがすべてmdとjsonlを持つ）をlaws-text.zipに対して検査する
+func assertTextZip(t *testing.T, textZip string) {
+	t.Helper()
+	entries := zipEntries(t, textZip)
+	idx := parseCSV(t, entries["index.csv"])
+	if len(idx) != 4 { // header + 3
+		t.Fatalf("index rows = %d", len(idx))
+	}
+	for _, row := range idx[1:] {
+		assertTextZipEntry(t, entries, row)
+	}
+}
+
+// assertTextZipEntry index.csvの1行分についてmd、jsonlの整合を検査する
+func assertTextZipEntry(t *testing.T, entries map[string][]byte, row []string) {
+	t.Helper()
+	rev := row[0]
+	md, okMD := entries[rev+".md"]
+	jl, okJL := entries[rev+".jsonl"]
+	if !okMD || !okJL {
+		t.Fatalf("INV-6: %s must have md and jsonl", rev)
+	}
+	if strings.Count(string(jl), "\n") != atoi(t, row[3]) {
+		t.Fatalf("INV-6: chunks column mismatch for %s", rev)
+	}
+	for line := range strings.SplitSeq(strings.TrimSpace(string(jl)), "\n") {
+		var c law.Chunk
+		if err := json.Unmarshal([]byte(line), &c); err != nil || c.LawID == "" || c.Text == "" || string(c.RevisionID) != rev {
+			t.Fatalf("INV-5: bad line %q err=%v", line, err)
+		}
+	}
+	if !strings.HasPrefix(string(md), "---\nlaw_id: ") {
+		t.Fatalf("md front matter missing for %s", rev)
+	}
+}
+
+// zipEntries pathのzipを読み、エントリ名からバイト列への対応を返す
+func zipEntries(t *testing.T, path string) map[string][]byte {
+	t.Helper()
+	r, err := zip.OpenReader(path)
+	if err != nil {
+		t.Fatalf("open zip %s: %v", path, err)
+	}
+	defer r.Close()
+	entries := make(map[string][]byte, len(r.File))
+	for _, f := range r.File {
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatalf("open zip entry %s: %v", f.Name, err)
+		}
+		body, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			t.Fatalf("read zip entry %s: %v", f.Name, err)
+		}
+		entries[f.Name] = body
+	}
+	return entries
+}
+
+// parseCSV バイト列をCSVとして読み、行の集合を返す
+func parseCSV(t *testing.T, body []byte) [][]string {
+	t.Helper()
+	rows, err := csv.NewReader(bytes.NewReader(body)).ReadAll()
+	if err != nil {
+		t.Fatalf("parse csv: %v", err)
+	}
+	return rows
+}
+
+// atoi CSVの数値列をintにする。数値でなければテストを失敗させる
+func atoi(t *testing.T, s string) int {
+	t.Helper()
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		t.Fatalf("atoi %q: %v", s, err)
+	}
+	return n
 }
 
 // TestDailyFlowWithChanges 導線2。切替1件（既知の改正が施行）と再登録1件を検出し、xml_indexを更新する
@@ -178,10 +270,10 @@ func TestDailyFlowWithChanges(t *testing.T) {
 		{LawRevisionID: "C_1", LawTitle: "title-C", Updated: "u1", AmendmentEnforcementDate: "2020-01-01", CurrentRevisionStatus: "CurrentEnforced"},
 		{LawRevisionID: "C_2", LawTitle: "title-C", Updated: "u2", AmendmentEnforcementDate: "2030-01-01", CurrentRevisionStatus: "UnEnforced"},
 	})
-	srv.setXML("A_1", []byte("<Law A_1/>"))
-	srv.setXML("B_1", []byte("<Law B_1/>"))
-	srv.setXML("C_1", []byte("<Law C_1/>"))
-	srv.setXML("C_2", []byte("<Law C_2/>"))
+	srv.setXML("A_1", lawXML("title-A", "本文A"))
+	srv.setXML("B_1", lawXML("title-B", "本文B"))
+	srv.setXML("C_1", lawXML("title-C", "本文C"))
+	srv.setXML("C_2", lawXML("title-C", "本文C2"))
 	ts := srv.start()
 	defer ts.Close()
 
@@ -202,7 +294,7 @@ func TestDailyFlowWithChanges(t *testing.T) {
 	// 法令Cの未施行改正が施行された（切替、既知のrevisionなので想定内）。法令Bは同じrevisionのまま再登録された（想定外）
 	srv.laws["C"] = mkLaw("C", "C_2", "u2", "2030-01-01")
 	srv.laws["B"] = mkLaw("B", "B_1", "u2", "2020-01-01")
-	srv.xmlBody["B_1"] = []byte("<Law B_1 v2/>")
+	srv.xmlBody["B_1"] = lawXML("title-B", "本文B2")
 
 	code, _, stderr = runCLI(t, env, "daily", "--from", string(from), "--to", string(yesterday),
 		"--release-tag", "t1", "--xml-dir", xmlDir, "--zip-path", zipPath)
@@ -256,9 +348,9 @@ func TestDailyFlowNoChanges(t *testing.T) {
 	srv.setLaw(mkLaw("B", "B_1", "u1", "2020-01-01"))
 	srv.setLaw(mkLaw("C", "C_1", "u1", "2020-01-01"))
 	srv.setFuture(mkLaw("C", "C_1", "u1", "2020-01-01"))
-	srv.setXML("A_1", []byte("<Law A_1/>"))
-	srv.setXML("B_1", []byte("<Law B_1/>"))
-	srv.setXML("C_1", []byte("<Law C_1/>"))
+	srv.setXML("A_1", lawXML("title-A", "本文A"))
+	srv.setXML("B_1", lawXML("title-B", "本文B"))
+	srv.setXML("C_1", lawXML("title-C", "本文C"))
 	ts := srv.start()
 	defer ts.Close()
 
@@ -313,9 +405,9 @@ func TestWeeklyFlow(t *testing.T) {
 	srv.setLaw(mkLaw("B", "B_1", "u1", "2020-01-01"))
 	srv.setLaw(mkLaw("C", "C_1", "u1", "2020-01-01"))
 	srv.setFuture(mkLaw("C", "C_1", "u1", "2020-01-01"))
-	srv.setXML("A_1", []byte("<Law A_1/>"))
-	srv.setXML("B_1", []byte("<Law B_1/>"))
-	srv.setXML("C_1", []byte("<Law C_1/>"))
+	srv.setXML("A_1", lawXML("title-A", "本文A"))
+	srv.setXML("B_1", lawXML("title-B", "本文B"))
+	srv.setXML("C_1", lawXML("title-C", "本文C"))
 	ts := srv.start()
 	defer ts.Close()
 
@@ -330,7 +422,7 @@ func TestWeeklyFlow(t *testing.T) {
 	}
 	idxBefore := readRows(t, filepath.Join(manifestDir, "xml_index.csv"))
 
-	srv.setSec1Override("A_1", []byte("<Law A_1 stale/>"))
+	srv.setSec1Override("A_1", lawXML("title-A", "陳腐化した本文A"))
 
 	code, _, stderr = runCLI(t, env, "weekly", "--release-tag", "t1", "--xml-dir", xmlDir, "--zip-path", zipPath)
 	if code != 0 {
@@ -389,6 +481,31 @@ func TestDailyFlowThresholdExceeded(t *testing.T) {
 	}
 	if len(rec.Changes) != n {
 		t.Fatalf("changes=%d", len(rec.Changes))
+	}
+}
+
+// TestIngestFlow 導線6。bootstrapが作ったtext-dirをingestサブコマンドで読み、noop sinkの件数出力を確かめる
+func TestIngestFlow(t *testing.T) {
+	srv := newFakeServer()
+	srv.setLaw(mkLaw("A", "A_1", "2026-09-01T00:00:00+09:00", "2026-09-01"))
+	srv.setXML("A_1", lawXML("法A", "本文A"))
+	ts := srv.start()
+	defer ts.Close()
+	manifestDir, work := t.TempDir(), t.TempDir()
+	env := baseEnv(ts.URL, manifestDir)
+	code, _, _ := runCLI(t, env, "bootstrap", "--release-tag", "v0.0.1",
+		"--xml-dir", filepath.Join(work, "xml"), "--zip-path", filepath.Join(work, "x.zip"),
+		"--text-dir", filepath.Join(work, "text"), "--text-zip-path", filepath.Join(work, "t.zip"))
+	if code != 0 {
+		t.Fatalf("bootstrap code=%d", code)
+	}
+	code, _, stderr := runCLI(t, env, "ingest", filepath.Join(work, "text"))
+	if code != 0 || !strings.Contains(stderr, "noop sink: 1 chunks (total 1)") {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	code, _, _ = runCLI(t, env, "ingest")
+	if code != 2 {
+		t.Fatalf("missing arg must be usage error, code=%d", code)
 	}
 }
 

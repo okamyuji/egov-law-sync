@@ -141,15 +141,41 @@ func (f *fakeBulk) RevisionIDs() []law.RevisionID {
 	return ids
 }
 
+type fakeText struct {
+	fail  map[law.RevisionID]bool
+	calls []law.RevisionID
+}
+
+func (f *fakeText) Render(_, _ string, meta law.Law) (law.TextRecord, error) {
+	f.calls = append(f.calls, meta.RevisionID)
+	if f.fail[meta.RevisionID] {
+		return law.TextRecord{}, errors.New("render failed")
+	}
+	return law.TextRecord{RevisionID: meta.RevisionID, MDBytes: 10, JSONLBytes: 20, Chunks: 1}, nil
+}
+
 type bundleCall struct {
 	xmlDir  string
 	outPath string
 	index   []law.XMLRecord
 }
 
+type textCall struct {
+	textDir string
+	outPath string
+	index   []law.TextRecord
+}
+
 type fakeBundler struct {
-	calls []bundleCall
-	err   error
+	calls     []bundleCall
+	textCalls []textCall
+	err       error
+	textErr   error
+}
+
+func (f *fakeBundler) BundleText(textDir, outPath string, index []law.TextRecord) error {
+	f.textCalls = append(f.textCalls, textCall{textDir: textDir, outPath: outPath, index: index})
+	return f.textErr
 }
 
 func (f *fakeBundler) Bundle(xmlDir, outPath string, index []law.XMLRecord) error {
@@ -231,6 +257,33 @@ func deref(r *RunRecord) (RunRecord, bool, error) {
 	return *r, true, nil
 }
 
+type fakeSource struct {
+	chunks []law.Chunk
+	broken int // この件数を渡した後にエラーを返す。0なら返さない
+}
+
+func (f *fakeSource) Each(_ string, fn func(law.Chunk) error) error {
+	for i, c := range f.chunks {
+		if f.broken > 0 && i == f.broken {
+			return errors.New("broken line")
+		}
+		if err := fn(c); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type fakeSink struct {
+	batches [][]law.Chunk
+	err     error
+}
+
+func (f *fakeSink) Put(_ context.Context, chunks []law.Chunk) error {
+	f.batches = append(f.batches, slices.Clone(chunks))
+	return f.err
+}
+
 type fakeClock struct {
 	now time.Time
 }
@@ -251,6 +304,7 @@ type fakes struct {
 	bulk      *fakeBulk
 	repo      *fakeRepo
 	bundler   *fakeBundler
+	text      *fakeText
 	clock     *fakeClock
 }
 
@@ -264,6 +318,7 @@ func newFakes() *fakes {
 		bulk:      &fakeBulk{sha: map[law.RevisionID]string{}, lookups: map[law.RevisionID]int{}},
 		repo:      &fakeRepo{revisions: map[law.RevisionID]law.Revision{}, xml: map[law.RevisionID]law.XMLRecord{}},
 		bundler:   &fakeBundler{},
+		text:      &fakeText{fail: map[law.RevisionID]bool{}},
 		clock:     &fakeClock{},
 	}
 }
@@ -278,6 +333,7 @@ func (f *fakes) deps() Deps {
 		Bulk:        f.bulk,
 		Repo:        f.repo,
 		Bundler:     f.bundler,
+		Text:        f.text,
 		Clock:       f.clock,
 		Threshold:   sync.DefaultThresholds(),
 		Concurrency: 1,

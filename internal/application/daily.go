@@ -25,11 +25,13 @@ var ErrInvalidStoredDate = errors.New("application: stored date in runs/ is not 
 
 // DailyOptions 日次の実行時オプション。FromとToが空なら自動で決める
 type DailyOptions struct {
-	From, To   law.Date
-	Force      bool
-	ReleaseTag string
-	XMLDir     string
-	ZipPath    string
+	From, To    law.Date
+	Force       bool
+	ReleaseTag  string
+	XMLDir      string
+	ZipPath     string
+	TextDir     string
+	TextZipPath string
 }
 
 // DailySyncer 日次同期
@@ -204,7 +206,7 @@ func (s *dailySyncer) fetchCatalog(ctx context.Context) ([]law.Law, int, string)
 	var laws []law.Law
 	var total int
 	var err error
-	for attempt := 0; attempt < 2; attempt++ {
+	for range 2 {
 		laws, total, err = s.d.Catalog.ListAll(ctx, "")
 		if err == nil && len(laws) == total {
 			return laws, total, ""
@@ -290,14 +292,17 @@ func (s *dailySyncer) abort(rec RunRecord, start time.Time, as []sync.Anomaly, t
 func (s *dailySyncer) apply(ctx context.Context, cur []law.Law, revisions map[law.RevisionID]law.Revision, o DailyOptions, rec RunRecord, start time.Time, changes []sync.Change, lg *fetchLog) (Result, error) {
 	var index map[law.RevisionID]law.XMLRecord
 	var fetched []law.XMLRecord
+	var rendered []law.TextRecord
 	if o.ReleaseTag != "" {
 		loaded, err := s.d.Repo.LoadXMLIndex()
 		if err != nil {
 			return Result{}, err
 		}
 		index = loaded
-		fetched = applyXML(ctx, s.d, sync.XMLTargets(cur, index), o.XMLDir, o.ReleaseTag, index, &rec, lg)
+		targets := sync.XMLTargets(cur, index)
+		fetched = applyXML(ctx, s.d, targets, o.XMLDir, o.ReleaseTag, index, &rec, lg)
 		warnXMLFailures(s.d, &rec)
+		rendered = renderTexts(s.d, targets, fetched, o.XMLDir, o.TextDir, &rec)
 	}
 	if err := s.d.Repo.SaveLaws(cur); err != nil {
 		return Result{}, err
@@ -311,6 +316,7 @@ func (s *dailySyncer) apply(ctx context.Context, cur []law.Law, revisions map[la
 		}
 	}
 	bundleXML(s.d, o.XMLDir, o.ZipPath, fetched, &rec)
+	bundleText(s.d, o.TextDir, o.TextZipPath, rendered, &rec)
 	rec.Applied = true
 	res, err := saveRun(s.d, rec, start, 0)
 	if err != nil {

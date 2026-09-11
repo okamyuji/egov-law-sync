@@ -59,7 +59,7 @@ func (c *Client) downloadToTemp(ctx context.Context, url string, timeout time.Du
 	}
 	defer f.Close()
 	if _, err := io.Copy(f, resp.Body); err != nil {
-		os.Remove(f.Name())
+		_ = os.Remove(f.Name())
 		return "", false, err
 	}
 	return f.Name(), true, nil

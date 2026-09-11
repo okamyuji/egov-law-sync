@@ -149,9 +149,12 @@ make build                                                          # CGOなし�
 bin/egov-law-sync bootstrap                                         # 初回。/lawsとlaw_fileからmanifestを作る
 bin/egov-law-sync daily --from 2026-09-09 --to 2026-09-10           # 範囲の差分を取り込む（省略時は前回適用済みの翌日からJSTの前日まで）
 bin/egov-law-sync weekly                                            # sec1 zipとxml_index.csvを照合する
+bin/egov-law-sync ingest bin/text                                   # MarkdownとJSONLの置き場からChunkSinkへ登録する（既定はno-op）
 ```
 
-共通のオプションは`--release-tag`、`--xml-dir`（既定値`bin/xml`）、`--zip-path`（既定値`bin/laws-xml.zip`）です。`daily`はさらに`--from`、`--to`、`--force`を受け取ります。
+共通のオプションは`--release-tag`、`--xml-dir`（既定値`bin/xml`）、`--zip-path`（既定値`bin/laws-xml.zip`）、`--text-dir`（既定値`bin/text`。空なら変換しない）、`--text-zip-path`（既定値`bin/laws-text.zip`）です。`daily`はさらに`--from`、`--to`、`--force`を受け取ります。
+
+Releaseのタグは`v0.0.1`のようなsemantic versionです。`MAJOR.MINOR`はリポジトリ直下の`VERSION`が持ち、変えるときは`VERSION`を書き換えるPRを出します。`PATCH`は実行のたびに既存のReleaseから自動で採番します。各Releaseには`laws-xml.zip`（取得したXMLとindex.csv）と`laws-text.zip`（同じ法令の`<revision_id>.md`、`<revision_id>.jsonl`、index.csv）が付きます。Markdownは先頭にlaw_id、revision_id、施行日、出典URLのfront matterを持ち、条を`####`の見出しにした本文が続きます。JSONLは1行が1条で、法令ID、revision_id、法令名、施行日、位置、条番号、見出し、本文、出典URLを持ちます。
 
 終了コードは4つです。
 
@@ -176,7 +179,98 @@ bin/egov-law-sync weekly                                            # sec1 zip�
 
 ローカルで実行した場合、`--release-tag`が空なので本文XMLの取得は行われず、laws.csv、revisions.csv、runs/だけが書き換わります。ローカル実行の結果はcommitしないでください。runs/をcommitすると次回のActionsの対象日がずれます。commitとReleaseの作成はGitHub Actionsのワークフローが行います。
 
-GitHub Actionsでは`bootstrap.yml`を手動で1回起動し、その後は`daily.yml`が毎日07:00 JSTに、`weekly.yml`が毎週日曜08:00 JSTに動きます。正常時は3つのCSVを自動commitし、異常判定に該当した日はCSVを変えずにラベル`anomaly`のIssueを作ります。人が内容を確認したうえで適用する場合は、`daily.yml`を手動起動して`--force`を渡します。CIは`okamyuji/reusable-workflows@v1`のGo CIとsecurity-scanに加えて、`make doclint`、`make e2e`、`make crap`、`make mutate`を実行します。
+GitHub Actionsでは`bootstrap.yml`を手動で1回起動し、その後は`daily.yml`が毎日07:00 JSTに、`weekly.yml`が毎週日曜08:00 JSTに動きます。正常時は3つのCSVを自動commitし、異常判定に該当した日はCSVを変えずにラベル`anomaly`のIssueを作ります。人が内容を確認したうえで適用する場合は、`daily.yml`を手動起動して`--force`を渡します。CIは`okamyuji/reusable-workflows@v1`のGo CIとsecurity-scanに加えて、`VERSION`の形式検査、`make doclint`、`make quality`を実行します。
+
+### 開発時の検査
+
+`make install-hooks`を一度実行すると、commitの前に`scripts/quality-gate.sh`が走ります。内容はgofmt、go vet、層の依存検査、staticcheck、golangci-lint、govulncheck、go build、shellテスト、doclint、go test（`-count=1 -shuffle=on -race`、カバレッジ80%以上）、CRAP値、mutation testing、E2E、gitleaksです。CIの`gates`ジョブも同じスクリプトを実行します。手で走らせるときは`make quality`です。staticcheck、golangci-lint、govulncheckは事前にインストールしておきます。
+
+## 任意のvectorDBへ登録する
+
+`laws-text.zip`を展開したディレクトリ（または実行後の`bin/text`）を`ingest`に渡すと、JSONLを1行ずつ読んで100件ずつ`ChunkSink`に渡します。既定のsinkは何も登録せず件数をstderrに出すだけなので、まずこれで読めることを確かめます。
+
+```sh
+unzip -q laws-text.zip -d text
+bin/egov-law-sync ingest text
+```
+
+登録先を足すには、`internal/infrastructure/sink/<name>/sink.go`を1ファイル作り、`cmd/egov-law-sync/main.go`の`buildDeps`にある`Sink: &noop.Sink{}`を自分のsinkに差し替えます。interfaceは次のとおりです。
+
+```go
+type ChunkSink interface {
+	Put(ctx context.Context, chunks []law.Chunk) error
+}
+```
+
+`law.Chunk`のキーはlaw_id、revision_id、law_title、law_num、enforcement_date、path、article、article_title、text、source_urlです。embeddingの計算とAPIキーの扱いはsink側で行います。同じ条の再登録は`revision_id`と`article`を結合した値を主キーにして上書きします。このリポジトリは`go.mod`に依存を足さない方針なので、database/sqlのドライバやHTTPクライアントを使うsinkは別モジュールに置くか、forkで足します。
+
+pgvectorの例です。
+
+```sql
+CREATE TABLE law_chunks (
+  id text PRIMARY KEY,
+  law_id text NOT NULL,
+  revision_id text NOT NULL,
+  law_title text NOT NULL,
+  enforcement_date date,
+  path text,
+  article text,
+  article_title text,
+  body text NOT NULL,
+  embedding vector(1536)
+);
+```
+
+```go
+func (s *Sink) Put(ctx context.Context, chunks []law.Chunk) error {
+	for _, c := range chunks {
+		vec, err := s.embed(ctx, c.Text)
+		if err != nil {
+			return err
+		}
+		id := string(c.RevisionID) + "|" + c.Article
+		if _, err := s.db.ExecContext(ctx, `INSERT INTO law_chunks (id, law_id, revision_id, law_title, enforcement_date, path, article, article_title, body, embedding)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			ON CONFLICT (id) DO UPDATE SET body = EXCLUDED.body, embedding = EXCLUDED.embedding, enforcement_date = EXCLUDED.enforcement_date`,
+			id, c.LawID, c.RevisionID, c.LawTitle, c.EnforcementDate, c.Path, c.Article, c.ArticleTitle, c.Text, vec); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+```
+
+Qdrantの例では、`PUT /collections/laws/points`に`{"points":[{"id":"<revision_idとarticleから作ったUUID>","vector":[...],"payload":{"law_id":...,"revision_id":...,"article":...,"text":...}}]}`をまとめて送ります。payloadにはChunkのキーをそのまま入れます。接続先とAPIキーは環境変数から読みます。
+
+## 所管省庁の通達・通知と組み合わせる
+
+条文はこのアプリが揃えますが、実務で参照する所管省庁の通達、通知、ガイドライン、審査基準は法令ではないので、e-Gov法令APIには載りません。それらを同じ形式で揃えてLLMに条文と一緒に読ませる場合の設計と実装の概略です。実装はこのリポジトリの範囲外で、別のコマンドまたは別のリポジトリに置きます。
+
+### 所管省庁の決め方
+
+府省令は法令番号に発出元が入っています（例: 「令和六年厚生労働省令第十号」）。法律と政令は法令番号だけでは分からないので、同じ題名で始まる施行規則の発出元を所管とみなします（例: 「労働基準法施行規則」が厚生労働省令なら「労働基準法」は厚生労働省の所管）。どちらも`laws.csv`の題名と`laws-text.zip`のfront matterにある`law_num`から機械的に引けます。内閣府令や複数省庁の共管は候補を複数持たせ、人が確定します。
+
+### 通達・通知の公開場所の例
+
+| 所管 | 公開場所 | 主な内容 |
+|---|---|---|
+| 国税庁 | `https://www.nta.go.jp/law/tsutatsu/` | 法令解釈通達、質疑応答事例 |
+| 厚生労働省 | `https://www.mhlw.go.jp/hourei/` | 法令等データベースの通知検索 |
+| 金融庁 | `https://www.fsa.go.jp/common/law/` | 監督指針、事務ガイドライン |
+| 公正取引委員会 | `https://www.jftc.go.jp/dk/guideline/` | 独占禁止法などのガイドライン |
+| 特許庁 | `https://www.jpo.go.jp/system/laws/rule/guideline/` | 審査基準 |
+
+他の省庁も、法令の所管ページや行政手続法に基づく審査基準・処分基準の公開ページに同種の文書があります。省庁ごとに一覧ページのURLと本文ページの構造が違うので、所管ごとに「一覧URL、一覧から本文URLを取る規則、本文の分割規則」を設定ファイル（例: `circulars.yaml`）に持たせ、パイプラインは共通にします。
+
+### 共通の流れ
+
+1. 取得。[webgrab](https://github.com/okamyuji/webgrab)のようなHTML本文抽出ツールで一覧ページを定期的に取得し、前回との差分で新着と改正を検知します。本文ページをMarkdownにし、出典URLと取得日をfront matterに残します。省庁サイトには機械可読な更新一覧が無いので、取得件数の急変で止める保護をこのアプリの異常判定と同じ考え方で持ちます。ページ構造の変更で壊れる前提で監視します。
+2. 分割。文書自身の項番号を単位にします（通達の「36-1」、監督指針の「II-1-2」、審査基準の章節など）。条文の条番号と一対一ではないので、条文とは別の規則です。
+3. 対応付け。本文中の「労働基準法第三十六条第一項」のような参照を正規表現で拾い、`laws.csv`の題名で`law_id`に、条番号を`article`の値に変換して候補にします。確定は人またはLLMが行います。
+4. 登録。`law.Chunk`と同じキーのJSONLにします。`path`に文書名、`article`に項番号、`law_id`と`article_title`に対応付けの候補を入れ、種別（条文か通達か）と発出元と発出日をpayloadに持たせて、このアプリの`ingest`と同じ`ChunkSink`で同じvectorDBに並べます。
+5. 照合。質問に関連する条文チャンクと通達チャンクを検索して同時にLLMへ渡します。通達側の`law_id`と`article`で条文と結び、`revisions.csv`の施行日と通達の発出日を並べて「どの版の条文に対する解釈か」を示します。改正後の条文に古い通達しか無い場合はその旨を示します。解釈と適用の判断はLLMと人が行い、この仕組みは本文と対応関係を供給するところまでです。
+
+税法では、所得税法などの本則と施行令・施行規則をこのアプリが揃え、国税庁の法令解釈通達と質疑応答事例を上の流れで並べる形になります。租税特別措置法は改正と部分施行が多いので、施行日と発出日の並記が特に役立ちます。
 
 ## 通知
 

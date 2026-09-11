@@ -1,0 +1,48 @@
+version: "2"
+run:
+  timeout: 5m
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - copyloopvar
+    - errorlint
+    - gocritic
+    - gosec
+    - misspell
+    - noctx
+    - revive
+    - unconvert
+  settings:
+    errcheck:
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+    gosec:
+      excludes:
+        - G301 # ディレクトリは0755で作る
+        - G304 # ファイル名はlaw.ValidIDで検証したIDから作る
+        - G306 # CSVとXMLは0644で書く
+        - G110 # zipの各エントリはsha256を取るだけで、メモリには載せない
+        - G703 # ファイルパスはlaw.ValidIDで検証したIDとCLIの引数からだけ作る
+        - G709 # XMLはe-Gov法令APIからHTTPSで取得したものだけを読む
+    gocritic:
+      disabled-checks:
+        - ifElseChain # switchのcase式はカバレッジ計装が拾わず、mutation gateがNOT COVEREDと誤判定する
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+      # 読み取り専用ハンドルのCloseと一時ファイルのRemoveは、失敗しても結果に影響しない
+      - source: '^\s*defer (.*\.Close|os\.Remove)\('
+        linters:
+          - errcheck

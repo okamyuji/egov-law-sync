@@ -14,20 +14,25 @@ import (
 	"github.com/okamyuji/egov-law-sync/internal/infrastructure/clock"
 	"github.com/okamyuji/egov-law-sync/internal/infrastructure/csv"
 	"github.com/okamyuji/egov-law-sync/internal/infrastructure/egov"
+	"github.com/okamyuji/egov-law-sync/internal/infrastructure/lawxml"
+	"github.com/okamyuji/egov-law-sync/internal/infrastructure/sink/noop"
 	"github.com/okamyuji/egov-law-sync/internal/infrastructure/zip"
 )
 
-const usage = `Usage: egov-law-sync <bootstrap|daily|weekly> [flags]
+const usage = `Usage: egov-law-sync <bootstrap|daily|weekly|ingest> [flags]
 
 Subcommands:
   bootstrap   初回構築。laws.csv、revisions.csv、xml_index.csvを作る
   daily       日次同期。前回適用済みの翌日からJST前日までを対象にする
   weekly      週次のzip照合。laws.csvとxml_index.csvは変えず、破損だけ直す
+  ingest <text-dir>   JSONLを読んでChunkSinkへ登録する（既定はnoop）
 
 Flags (bootstrap, daily, weekly共通):
-  --release-tag string   GitHub Releaseのタグ。空なら本文取得をしない
-  --xml-dir string       XMLの保存先ディレクトリ（既定値 bin/xml）
-  --zip-path string      リリース用zipの出力先（既定値 bin/laws-xml.zip）
+  --release-tag string    GitHub Releaseのタグ。空なら本文取得をしない
+  --xml-dir string        XMLの保存先ディレクトリ（既定値 bin/xml）
+  --zip-path string       リリース用zipの出力先（既定値 bin/laws-xml.zip）
+  --text-dir string       MarkdownとJSONLの保存先ディレクトリ（既定値 bin/text）
+  --text-zip-path string  MarkdownとJSONLのzipの出力先（既定値 bin/laws-text.zip）
 
 Flags (dailyのみ):
   --from string   対象範囲の開始日 YYYY-MM-DD。空なら自動で決める
@@ -59,6 +64,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return execute(ctx, args[1:], stdout, stderr, parseDaily, application.NewDailySyncer)
 	case "weekly":
 		return execute(ctx, args[1:], stdout, stderr, parseWeekly, application.NewWeeklyChecker)
+	case "ingest":
+		return execute(ctx, args[1:], stdout, stderr, parseIngest, application.NewIngester)
 	default:
 		fmt.Fprintf(stderr, "unknown subcommand: %s\n%s", args[0], usage)
 		return 2
@@ -101,6 +108,9 @@ func buildDeps() (application.Deps, error) {
 		Catalog: c, Revisions: c, XML: c, Updates: c, Daily: c, Bulk: c,
 		Repo:        csv.New(manifestDir),
 		Bundler:     zip.Bundler{},
+		Text:        lawxml.Renderer{},
+		Source:      lawxml.JSONL{},
+		Sink:        &noop.Sink{},
 		Clock:       clock.System{},
 		Threshold:   sync.DefaultThresholds(),
 		Concurrency: atoiEnv("EGOV_CONCURRENCY", 1),

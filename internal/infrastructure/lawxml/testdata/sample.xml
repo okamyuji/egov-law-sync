@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Law Era="Reiwa" Lang="ja" LawType="Act" Num="001" Year="8">
+  <LawNum>令和八年法律第一号</LawNum>
+  <LawBody>
+    <LawTitle Kana="てすとほう">テスト法</LawTitle>
+    <TOC>
+      <TOCLabel>目次</TOCLabel>
+      <TOCPart Num="1"><PartTitle>第一編　総則</PartTitle></TOCPart>
+    </TOC>
+    <MainProvision>
+      <Part Num="1">
+        <PartTitle>第一編　総則</PartTitle>
+        <Chapter Num="1">
+          <ChapterTitle>第一章　目的</ChapterTitle>
+          <Article Num="1">
+            <ArticleCaption>（目的）</ArticleCaption>
+            <ArticleTitle>第一条</ArticleTitle>
+            <Paragraph Num="1">
+              <ParagraphNum/>
+              <ParagraphSentence><Sentence Num="1">この法律は、<Ruby>労<Rt>ろう</Rt></Ruby>働者を守る。</Sentence><Sentence Num="2">二文目である。</Sentence></ParagraphSentence>
+            </Paragraph>
+            <Paragraph Num="2">
+              <ParagraphNum>２</ParagraphNum>
+              <ParagraphSentence><Sentence>次の各号に掲げる者は除く。</Sentence></ParagraphSentence>
+              <Item Num="1">
+                <ItemTitle>一</ItemTitle>
+                <ItemSentence><Sentence>役員</Sentence></ItemSentence>
+              </Item>
+              <Item Num="2">
+                <ItemTitle>二</ItemTitle>
+                <ItemSentence><Column Num="1"><Sentence>短期</Sentence></Column><Column Num="2"><Sentence>三十日未満の者</Sentence></Column></ItemSentence>
+                <Subitem1 Num="1">
+                  <Subitem1Title>イ</Subitem1Title>
+                  <Subitem1Sentence><Sentence>日雇</Sentence></Subitem1Sentence>
+                </Subitem1>
+              </Item>
+            </Paragraph>
+          </Article>
+        </Chapter>
+        <Chapter Num="2">
+          <ChapterTitle>第二章　基準</ChapterTitle>
+          <Section Num="1">
+            <SectionTitle>第一節　時間</SectionTitle>
+            <Article Num="2">
+              <ArticleTitle>第二条</ArticleTitle>
+              <Paragraph Num="1">
+                <ParagraphNum/>
+                <ParagraphSentence><Sentence>労働時間は別表による。</Sentence></ParagraphSentence>
+                <TableStruct>
+                  <Table>
+                    <TableRow><TableColumn><Sentence>区分</Sentence></TableColumn><TableColumn><Sentence>時間</Sentence></TableColumn></TableRow>
+                    <TableRow><TableColumn><Sentence>通常</Sentence></TableColumn><TableColumn><Sentence>八時間</Sentence></TableColumn></TableRow>
+                  </Table>
+                </TableStruct>
+              </Paragraph>
+            </Article>
+          </Section>
+        </Chapter>
+      </Part>
+    </MainProvision>
+    <SupplProvision AmendLawNum="令和八年法律第二号">
+      <SupplProvisionLabel>附　則</SupplProvisionLabel>
+      <Paragraph Num="1">
+        <ParagraphNum/>
+        <ParagraphCaption>（施行期日）</ParagraphCaption>
+        <ParagraphSentence><Sentence>この法律は、公布の日から施行する。</Sentence></ParagraphSentence>
+      </Paragraph>
+      <Article Num="2">
+        <ArticleTitle>第二条</ArticleTitle>
+        <Paragraph Num="1">
+          <ParagraphNum/>
+          <ParagraphSentence><Sentence>経過措置を定める。</Sentence></ParagraphSentence>
+        </Paragraph>
+      </Article>
+    </SupplProvision>
+    <AppdxTable>
+      <AppdxTableTitle>別表第一</AppdxTableTitle>
+      <RelatedArticleNum>（第二条関係）</RelatedArticleNum>
+      <Item Num="1">
+        <ItemTitle>一</ItemTitle>
+        <ItemSentence><Sentence>製造業</Sentence></ItemSentence>
+      </Item>
+    </AppdxTable>
+  </LawBody>
+</Law>

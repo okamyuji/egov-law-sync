@@ -50,11 +50,11 @@ func writeCSV(path string, header []string, rows [][]string) error {
 	}
 	w := csv.NewWriter(f)
 	if err := w.Write(header); err != nil {
-		f.Close()
+		_ = f.Close()
 		return err
 	}
 	if err := w.WriteAll(rows); err != nil {
-		f.Close()
+		_ = f.Close()
 		return err
 	}
 	if err := f.Close(); err != nil {

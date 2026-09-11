@@ -49,41 +49,52 @@ func newFlagSet(name string) *flag.FlagSet {
 }
 
 // commonFlags 3つのサブコマンドに共通のフラグを登録する
-func commonFlags(fs *flag.FlagSet) (releaseTag, xmlDir, zipPath *string) {
+func commonFlags(fs *flag.FlagSet) (releaseTag, xmlDir, zipPath, textDir, textZipPath *string) {
 	releaseTag = fs.String("release-tag", "", "GitHub Releaseのタグ")
 	xmlDir = fs.String("xml-dir", "bin/xml", "XMLの保存先ディレクトリ")
 	zipPath = fs.String("zip-path", "bin/laws-xml.zip", "リリース用zipの出力先")
-	return releaseTag, xmlDir, zipPath
+	textDir = fs.String("text-dir", "bin/text", "MarkdownとJSONLの保存先ディレクトリ。空なら変換しない")
+	textZipPath = fs.String("text-zip-path", "bin/laws-text.zip", "MarkdownとJSONLのzipの出力先")
+	return releaseTag, xmlDir, zipPath, textDir, textZipPath
 }
 
 func parseBootstrap(args []string) (application.BootstrapOptions, error) {
 	fs := newFlagSet("bootstrap")
-	releaseTag, xmlDir, zipPath := commonFlags(fs)
+	releaseTag, xmlDir, zipPath, textDir, textZipPath := commonFlags(fs)
 	if err := fs.Parse(args); err != nil {
 		return application.BootstrapOptions{}, err
 	}
-	return application.BootstrapOptions{ReleaseTag: *releaseTag, XMLDir: *xmlDir, ZipPath: *zipPath}, nil
+	return application.BootstrapOptions{
+		ReleaseTag: *releaseTag, XMLDir: *xmlDir, ZipPath: *zipPath,
+		TextDir: *textDir, TextZipPath: *textZipPath,
+	}, nil
 }
 
 func parseWeekly(args []string) (application.WeeklyOptions, error) {
 	fs := newFlagSet("weekly")
-	releaseTag, xmlDir, zipPath := commonFlags(fs)
+	releaseTag, xmlDir, zipPath, textDir, textZipPath := commonFlags(fs)
 	if err := fs.Parse(args); err != nil {
 		return application.WeeklyOptions{}, err
 	}
-	return application.WeeklyOptions{ReleaseTag: *releaseTag, XMLDir: *xmlDir, ZipPath: *zipPath}, nil
+	return application.WeeklyOptions{
+		ReleaseTag: *releaseTag, XMLDir: *xmlDir, ZipPath: *zipPath,
+		TextDir: *textDir, TextZipPath: *textZipPath,
+	}, nil
 }
 
 func parseDaily(args []string) (application.DailyOptions, error) {
 	fs := newFlagSet("daily")
-	releaseTag, xmlDir, zipPath := commonFlags(fs)
+	releaseTag, xmlDir, zipPath, textDir, textZipPath := commonFlags(fs)
 	from := fs.String("from", "", "対象範囲の開始日 YYYY-MM-DD")
 	to := fs.String("to", "", "対象範囲の終了日 YYYY-MM-DD")
 	force := fs.Bool("force", false, "異常判定を無視して適用する")
 	if err := fs.Parse(args); err != nil {
 		return application.DailyOptions{}, err
 	}
-	o := application.DailyOptions{Force: *force, ReleaseTag: *releaseTag, XMLDir: *xmlDir, ZipPath: *zipPath}
+	o := application.DailyOptions{
+		Force: *force, ReleaseTag: *releaseTag, XMLDir: *xmlDir, ZipPath: *zipPath,
+		TextDir: *textDir, TextZipPath: *textZipPath,
+	}
 	var err error
 	if o.From, err = parseOptionalDate(*from); err != nil {
 		return application.DailyOptions{}, err
@@ -92,6 +103,17 @@ func parseDaily(args []string) (application.DailyOptions, error) {
 		return application.DailyOptions{}, err
 	}
 	return o, nil
+}
+
+func parseIngest(args []string) (application.IngestOptions, error) {
+	fs := newFlagSet("ingest")
+	if err := fs.Parse(args); err != nil {
+		return application.IngestOptions{}, err
+	}
+	if fs.NArg() != 1 {
+		return application.IngestOptions{}, errors.New("ingest needs exactly one argument: <text-dir>")
+	}
+	return application.IngestOptions{TextDir: fs.Arg(0)}, nil
 }
 
 // parseOptionalDate 空文字は未指定として扱い、ゼロ値のlaw.Dateを返す
