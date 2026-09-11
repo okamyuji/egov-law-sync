@@ -1,0 +1,14 @@
+{
+  "kind": "weekly",
+  "started_at": "2026-09-11T10:50:38Z",
+  "date_jst": "2026-09-11",
+  "applied": true,
+  "total_count": 0,
+  "counts": {
+    "missing_in_zip": 67,
+    "zip_only": 1758,
+    "zip_stale": 1
+  },
+  "bytes": 0,
+  "seconds": 22.09691438
+}
