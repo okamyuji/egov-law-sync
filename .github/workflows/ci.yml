@@ -35,3 +35,9 @@ jobs:
       - run: make crap
       - run: make mutate
       - run: make e2e
+
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: grep -Eq '^[0-9]+\.[0-9]+$' VERSION || { echo "VERSION must be MAJOR.MINOR"; exit 1; }

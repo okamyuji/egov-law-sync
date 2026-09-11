@@ -31,7 +31,7 @@ jobs:
           gh label create anomaly --force --color B60205
           gh label create warning --force --color FBCA04
       - id: tag
-        run: echo "tag=sync-$(date -u +%Y%m%dT%H%M%SZ)" >> "$GITHUB_OUTPUT"
+        run: echo "tag=$(bash tools/next-version.sh)" >> "$GITHUB_OUTPUT"
       - run: make build
       - id: run
         run: |
@@ -46,8 +46,11 @@ jobs:
       - name: release
         if: steps.run.outputs.code == '0'
         run: |
-          if [ -f bin/laws-xml.zip ]; then
-            gh release create "${{ steps.tag.outputs.tag }}" bin/laws-xml.zip --title "${{ steps.tag.outputs.tag }}" --notes "出典: e-Gov法令検索（デジタル庁）。取得したXMLをlaws-xml.zipに含みます。"
+          assets=()
+          [ -f bin/laws-xml.zip ] && assets+=(bin/laws-xml.zip)
+          [ -f bin/laws-text.zip ] && assets+=(bin/laws-text.zip)
+          if [ "${#assets[@]}" -gt 0 ]; then
+            gh release create "${{ steps.tag.outputs.tag }}" "${assets[@]}" --title "${{ steps.tag.outputs.tag }} daily $(TZ=Asia/Tokyo date +%F)" --notes "出典: e-Gov法令検索（デジタル庁）。laws-xml.zipは取得したXML、laws-text.zipは同じ法令のMarkdownと条単位のJSONLです。"
           fi
       - name: commit
         if: steps.run.outputs.code == '0' || steps.run.outputs.code == '3'
