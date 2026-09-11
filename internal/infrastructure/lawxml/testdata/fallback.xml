@@ -3,6 +3,7 @@
   <LawNum>令和八年法律第二号</LawNum>
   <LawBody>
     <LawTitle>予備テスト法</LawTitle>
+    <EnactStatement>内閣は、この政令を制定する。</EnactStatement>
     <MainProvision>
       <Article Num="1">
         <ArticleTitle>第一条</ArticleTitle>
@@ -48,5 +49,19 @@
         </Article>
       </Chapter>
     </SupplProvision>
+    <AppdxFig>
+    <AppdxFigTitle>（附図）</AppdxFigTitle>
+    <FigStruct>
+      <FigStructTitle>記章ノ形状</FigStructTitle>
+      <Fig src="./pict/x.jpg"/>
+      <Remarks><RemarksLabel>備考</RemarksLabel><Sentence>記章ハ左胸ニ佩用ス</Sentence></Remarks>
+    </FigStruct>
+    <TableStruct>
+      <Table>
+        <TableRow><TableColumn><Sentence>記章ノ制式</Sentence></TableColumn><TableColumn><Sentence>径三糎</Sentence></TableColumn></TableRow>
+      </Table>
+      <Remarks><RemarksLabel>備考</RemarksLabel><Item Num="1"><ItemTitle>一</ItemTitle><ItemSentence><Sentence>径ハ三糎トス</Sentence></ItemSentence></Item></Remarks>
+    </TableStruct>
+  </AppdxFig>
   </LawBody>
 </Law>

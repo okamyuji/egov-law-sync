@@ -40,14 +40,18 @@ func Convert(r io.Reader, meta law.Law) ([]byte, []law.Chunk, error) {
 	c := &converter{meta: meta, lawNum: root.child("LawNum").text()}
 	c.frontMatter()
 	c.line("# " + body.child("LawTitle").text())
-	if mp := body.child("MainProvision"); mp != nil {
-		c.provision(mp, 2)
-	}
-	for _, sp := range body.children("SupplProvision") {
-		c.supplProvision(sp)
-	}
-	for _, at := range body.children("AppdxTable") {
-		c.appdxTable(at)
+	for _, e := range body.elements() {
+		switch e.name {
+		case "LawTitle", "TOC":
+		case "MainProvision":
+			c.provision(e, 2)
+		case "SupplProvision":
+			c.supplProvision(e)
+		case "AppdxTable":
+			c.appdxTable(e)
+		default:
+			c.appendix(e)
+		}
 	}
 	return c.md.Bytes(), c.chunks, nil
 }
@@ -175,16 +179,17 @@ func (c *converter) item(it *node, depth int) []string {
 
 // fallback 明示的に扱わない要素。配下のSentenceを出現順に段落として書き出し、本文を落とさない
 func (c *converter) fallback(n *node) []string {
+	if n.name == "Sentence" {
+		t := n.text()
+		if t == "" {
+			return nil
+		}
+		c.line(t)
+		return []string{t}
+	}
 	var lines []string
 	for _, e := range n.elements() {
-		if e.name != "Sentence" {
-			lines = append(lines, c.fallback(e)...)
-			continue
-		}
-		if t := e.text(); t != "" {
-			c.line(t)
-			lines = append(lines, t)
-		}
+		lines = append(lines, c.fallback(e)...)
 	}
 	return lines
 }
@@ -195,20 +200,37 @@ func isSubitem(name string) bool {
 		!strings.HasSuffix(name, "Title") && !strings.HasSuffix(name, "Sentence")
 }
 
-// table 表を行ごとに1行にする。列数が行ごとに変わるのでMarkdownの表にはしない
+// table 表を行ごとに1行にする。列数が行ごとに変わるのでMarkdownの表にはしない。表題と備考も落とさない
 func (c *converter) table(ts *node) []string {
 	var lines []string
+	if title := ts.child("TableStructTitle").text(); title != "" {
+		c.line(title)
+		lines = append(lines, title)
+	}
 	c.md.WriteString("\n")
-	for _, tbl := range ts.children("Table") {
-		for _, row := range tbl.children("TableRow") {
-			var cols []string
-			for _, col := range row.children("TableColumn") {
-				cols = append(cols, col.text())
-			}
-			l := strings.Join(cols, "｜")
-			c.md.WriteString(l + "\n")
-			lines = append(lines, l)
+	for _, e := range ts.elements() {
+		switch e.name {
+		case "TableStructTitle":
+		case "Table":
+			lines = append(lines, c.tableRows(e)...)
+		default:
+			lines = append(lines, c.blocks(e, 0)...)
 		}
+	}
+	return lines
+}
+
+// tableRows 1つのTableの行を書く
+func (c *converter) tableRows(tbl *node) []string {
+	var lines []string
+	for _, row := range tbl.children("TableRow") {
+		var cols []string
+		for _, col := range row.children("TableColumn") {
+			cols = append(cols, col.text())
+		}
+		l := strings.Join(cols, "｜")
+		c.md.WriteString(l + "\n")
+		lines = append(lines, l)
 	}
 	return lines
 }
@@ -237,6 +259,26 @@ func (c *converter) appdxTable(at *node) {
 		c.line(rel)
 	}
 	c.blocks(at, 0)
+}
+
+// appendixLabel 見出し要素を持たない付属資料の見出し
+var appendixLabel = map[string]string{"Preamble": "前文", "EnactStatement": "制定文"}
+
+// appendix 別表以外の付属資料（附図、様式、別記、前文、制定文など）。見出しは要素のTitle子要素から取り、本文は落とさずに書く
+func (c *converter) appendix(n *node) {
+	title := n.child(n.name + "Title").text()
+	if title == "" {
+		title = appendixLabel[n.name]
+	}
+	if title == "" {
+		title = n.name
+	}
+	c.line("## " + title)
+	if len(n.elements()) == 0 {
+		c.line(n.text())
+		return
+	}
+	c.blocks(n, 0)
 }
 
 func (c *converter) addChunk(article, articleTitle string, lines []string) {

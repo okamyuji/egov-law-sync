@@ -104,8 +104,12 @@ func (s *sentenceScan) end(name string) {
 }
 
 func (s *sentenceScan) chars(b []byte) {
-	if s.cur != nil && s.skip == 0 {
-		s.cur.Write(b)
+	if s.cur == nil || s.skip > 0 {
+		return
+	}
+	// 変換器と同じ正規化。要素間の改行や字下げは本文ではないが、全角スペースは本文として残す
+	if t := strings.Trim(string(b), " \t\r\n"); t != "" {
+		s.cur.WriteString(t)
 	}
 }
 
@@ -198,6 +202,11 @@ func TestINV7FallbackKeepsEverySentence(t *testing.T) {
 	for _, want := range []string{"一覧の一文である。", "備考の一文である。", "左の欄｜右の欄"} {
 		if !strings.Contains(chunks[0].Text, want) {
 			t.Fatalf("chunk text must carry %q: %q", want, chunks[0].Text)
+		}
+	}
+	for _, want := range []string{"\n## 制定文\n", "内閣は、この政令を制定する。", "\n## （附図）\n", "記章ノ制式｜径三糎", "記章ハ左胸ニ佩用ス", "- 一　径ハ三糎トス"} {
+		if !strings.Contains(string(md), want) {
+			t.Fatalf("appendix content %q must reach the markdown:\n%s", want, md)
 		}
 	}
 	if !strings.Contains(string(md), "改正の一文である。") {
