@@ -33,7 +33,7 @@ func runCLI(t *testing.T, env map[string]string, args ...string) (code int, stdo
 	if bin == "" {
 		t.Fatal("EGOV_BIN is not set; run via make e2e")
 	}
-	cmd := exec.Command(bin, args...)
+	cmd := exec.CommandContext(t.Context(), bin, args...)
 	cmd.Env = os.Environ()
 	for k, v := range env {
 		cmd.Env = append(cmd.Env, k+"="+v)

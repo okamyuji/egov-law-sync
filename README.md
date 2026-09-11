@@ -178,6 +178,10 @@ bin/egov-law-sync weekly                                            # sec1 zip�
 
 GitHub Actionsでは`bootstrap.yml`を手動で1回起動し、その後は`daily.yml`が毎日07:00 JSTに、`weekly.yml`が毎週日曜08:00 JSTに動きます。正常時は3つのCSVを自動commitし、異常判定に該当した日はCSVを変えずにラベル`anomaly`のIssueを作ります。人が内容を確認したうえで適用する場合は、`daily.yml`を手動起動して`--force`を渡します。CIは`okamyuji/reusable-workflows@v1`のGo CIとsecurity-scanに加えて、`make doclint`、`make e2e`、`make crap`、`make mutate`を実行します。
 
+### 開発時の検査
+
+`make install-hooks`を一度実行すると、commitの前に`scripts/quality-gate.sh`が走ります。内容はgofmt、go vet、層の依存検査、staticcheck、golangci-lint、govulncheck、go build、shellテスト、doclint、go test（`-count=1 -shuffle=on -race`、カバレッジ80%以上）、CRAP値、mutation testing、E2E、gitleaksです。CIの`gates`ジョブも同じスクリプトを実行します。手で走らせるときは`make quality`です。staticcheck、golangci-lint、govulncheckは事前にインストールしておきます。
+
 ## 通知
 
 初回スコープでは通知を実装していません。日次ジョブの差分確定直後に呼び出し位置があり、Slack Incoming Webhookで差分の法令ID、法令名、施行日を投稿する形を想定しています。詳細は[設計書の通知の節](docs/design.md#通知)にあります。

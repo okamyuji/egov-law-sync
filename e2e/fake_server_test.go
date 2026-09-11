@@ -114,13 +114,6 @@ func (s *fakeServer) setV1(d law.Date, ids []law.LawID) {
 	s.v1Found[d] = ids
 }
 
-// setSec3 その日のsec3 zipのディレクトリ一覧を設定する。未設定の日は500を返す
-func (s *fakeServer) setSec3(d law.Date, dirs []string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.sec3Found[d] = dirs
-}
-
 func (s *fakeServer) start() *httptest.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/laws", s.handleLaws)
