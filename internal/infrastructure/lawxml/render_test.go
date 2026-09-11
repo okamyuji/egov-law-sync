@@ -246,7 +246,7 @@ func TestParagraphNumFallsBackToNumAttr(t *testing.T) {
 func TestRealLawParagraphsGetNumbersFromNumAttr(t *testing.T) {
 	md, _ := mustConvert(t, "testdata/322AC0000000049.xml", realMeta)
 	numbered := 0
-	for _, l := range strings.Split(string(md), "\n") {
+	for l := range strings.SplitSeq(string(md), "\n") {
 		r := []rune(l)
 		if len(r) > 1 && r[0] >= '０' && r[0] <= '９' {
 			numbered++

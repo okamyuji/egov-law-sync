@@ -1,7 +1,8 @@
 package sync
 
 import (
-	"sort"
+	"cmp"
+	"slices"
 
 	"github.com/okamyuji/egov-law-sync/internal/domain/law"
 )
@@ -48,7 +49,7 @@ func Classify(prev, cur []law.Law) []Change {
 		}
 	}
 
-	sort.SliceStable(changes, func(i, j int) bool { return changes[i].LawID < changes[j].LawID })
+	slices.SortStableFunc(changes, func(a, b Change) int { return cmp.Compare(a.LawID, b.LawID) })
 	return changes
 }
 

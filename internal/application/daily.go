@@ -206,7 +206,7 @@ func (s *dailySyncer) fetchCatalog(ctx context.Context) ([]law.Law, int, string)
 	var laws []law.Law
 	var total int
 	var err error
-	for attempt := 0; attempt < 2; attempt++ {
+	for range 2 {
 		laws, total, err = s.d.Catalog.ListAll(ctx, "")
 		if err == nil && len(laws) == total {
 			return laws, total, ""

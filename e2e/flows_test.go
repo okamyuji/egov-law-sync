@@ -47,8 +47,7 @@ func runCLI(t *testing.T, env map[string]string, args ...string) (code int, stdo
 	cmd.Stderr = &errBuf
 	err := cmd.Run()
 	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			return exitErr.ExitCode(), outBuf.String(), errBuf.String()
 		}
 		t.Fatalf("run %v: %v", args, err)
@@ -205,7 +204,7 @@ func assertTextZipEntry(t *testing.T, entries map[string][]byte, row []string) {
 	if strings.Count(string(jl), "\n") != atoi(t, row[3]) {
 		t.Fatalf("INV-6: chunks column mismatch for %s", rev)
 	}
-	for _, line := range strings.Split(strings.TrimSpace(string(jl)), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(string(jl)), "\n") {
 		var c law.Chunk
 		if err := json.Unmarshal([]byte(line), &c); err != nil || c.LawID == "" || c.Text == "" || string(c.RevisionID) != rev {
 			t.Fatalf("INV-5: bad line %q err=%v", line, err)
