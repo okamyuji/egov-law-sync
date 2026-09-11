@@ -13,7 +13,7 @@ space_check() { # file mode(md|go)
     if($mode eq "md"){ if(/^```/){$c=!$c;next} next if $c; s/`[^`]*`//g; }
     else { next unless m{^\s*//}; s{^\s*//\s*}{}; s{^[A-Za-z_][A-Za-z0-9_]*\s+(?!は)}{}; }
     print "[High] $ARGV:$. 全角と半角英数の間に半角スペースがあります\n"
-      if /[\p{Han}\p{Hiragana}\p{Katakana}、。（）]\s+[A-Za-z0-9]/ || /[A-Za-z0-9%]\s+[\p{Han}\p{Hiragana}\p{Katakana}、。（）]/;
+      if /[\p{Han}\p{Hiragana}\p{Katakana}、。（）]\s+[A-Za-z0-9]/ || /[A-Za-z0-9%")\x27\]]\s+[\p{Han}\p{Hiragana}\p{Katakana}、。（）]/;
   ' "$2" "$1"
 }
 md_files=$(find "$target" -name '*.md' -not -path '*/_quality/*' -not -path '*/superpowers/*' -not -path '*/.superpowers/*' -not -path '*/.git/*')
