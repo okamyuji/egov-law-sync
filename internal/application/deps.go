@@ -21,6 +21,7 @@ type Deps struct {
 	Bulk        BulkArchive
 	Repo        ManifestRepository
 	Bundler     ReleaseBundler
+	Text        TextRenderer
 	Clock       Clock
 	Threshold   sync.Thresholds
 	Concurrency int
@@ -151,6 +152,7 @@ func applyXML(ctx context.Context, d Deps, targets []law.Law, dir, tag string, i
 		fetched = append(fetched, o.rec)
 		index[o.rec.RevisionID] = o.rec
 		rec.Bytes += o.rec.Bytes
+		progress("xml", len(fetched)+rec.Counts["xml_failed"], len(targets))
 	}
 	rec.Counts["xml_ok"] += len(fetched)
 	return fetched

@@ -8,9 +8,11 @@ import (
 
 // WeeklyOptions 週次の実行時オプション
 type WeeklyOptions struct {
-	ReleaseTag string
-	XMLDir     string
-	ZipPath    string
+	ReleaseTag  string
+	XMLDir      string
+	ZipPath     string
+	TextDir     string
+	TextZipPath string
 }
 
 // WeeklyChecker 週次のsec1 zipとの照合。異常判定は持たず、xml_index.csvを直接直す
@@ -59,6 +61,8 @@ func (w *weeklyChecker) Run(ctx context.Context, o WeeklyOptions) (Result, error
 			return Result{}, err
 		}
 		bundleXML(w.d, o.XMLDir, o.ZipPath, fetched, &rec)
+		rendered := renderTexts(w.d, mismatched, fetched, o.XMLDir, o.TextDir, &rec)
+		bundleText(w.d, o.TextDir, o.TextZipPath, rendered, &rec)
 	}
 	rec.Applied = true
 	return saveRun(w.d, rec, start, 0)

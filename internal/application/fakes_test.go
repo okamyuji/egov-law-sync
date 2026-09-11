@@ -141,6 +141,19 @@ func (f *fakeBulk) RevisionIDs() []law.RevisionID {
 	return ids
 }
 
+type fakeText struct {
+	fail  map[law.RevisionID]bool
+	calls []law.RevisionID
+}
+
+func (f *fakeText) Render(_, _ string, meta law.Law) (law.TextRecord, error) {
+	f.calls = append(f.calls, meta.RevisionID)
+	if f.fail[meta.RevisionID] {
+		return law.TextRecord{}, errors.New("render failed")
+	}
+	return law.TextRecord{RevisionID: meta.RevisionID, MDBytes: 10, JSONLBytes: 20, Chunks: 1}, nil
+}
+
 type bundleCall struct {
 	xmlDir  string
 	outPath string
@@ -264,6 +277,7 @@ type fakes struct {
 	bulk      *fakeBulk
 	repo      *fakeRepo
 	bundler   *fakeBundler
+	text      *fakeText
 	clock     *fakeClock
 }
 
@@ -277,6 +291,7 @@ func newFakes() *fakes {
 		bulk:      &fakeBulk{sha: map[law.RevisionID]string{}, lookups: map[law.RevisionID]int{}},
 		repo:      &fakeRepo{revisions: map[law.RevisionID]law.Revision{}, xml: map[law.RevisionID]law.XMLRecord{}},
 		bundler:   &fakeBundler{},
+		text:      &fakeText{fail: map[law.RevisionID]bool{}},
 		clock:     &fakeClock{},
 	}
 }
@@ -291,6 +306,7 @@ func (f *fakes) deps() Deps {
 		Bulk:        f.bulk,
 		Repo:        f.repo,
 		Bundler:     f.bundler,
+		Text:        f.text,
 		Clock:       f.clock,
 		Threshold:   sync.DefaultThresholds(),
 		Concurrency: 1,

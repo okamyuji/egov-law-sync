@@ -14,6 +14,7 @@ import (
 	"github.com/okamyuji/egov-law-sync/internal/infrastructure/clock"
 	"github.com/okamyuji/egov-law-sync/internal/infrastructure/csv"
 	"github.com/okamyuji/egov-law-sync/internal/infrastructure/egov"
+	"github.com/okamyuji/egov-law-sync/internal/infrastructure/lawxml"
 	"github.com/okamyuji/egov-law-sync/internal/infrastructure/zip"
 )
 
@@ -25,9 +26,11 @@ Subcommands:
   weekly      週次のzip照合。laws.csvとxml_index.csvは変えず、破損だけ直す
 
 Flags (bootstrap, daily, weekly共通):
-  --release-tag string   GitHub Releaseのタグ。空なら本文取得をしない
-  --xml-dir string       XMLの保存先ディレクトリ（既定値 bin/xml）
-  --zip-path string      リリース用zipの出力先（既定値 bin/laws-xml.zip）
+  --release-tag string    GitHub Releaseのタグ。空なら本文取得をしない
+  --xml-dir string        XMLの保存先ディレクトリ（既定値 bin/xml）
+  --zip-path string       リリース用zipの出力先（既定値 bin/laws-xml.zip）
+  --text-dir string       MarkdownとJSONLの保存先ディレクトリ（既定値 bin/text）
+  --text-zip-path string  MarkdownとJSONLのzipの出力先（既定値 bin/laws-text.zip）
 
 Flags (dailyのみ):
   --from string   対象範囲の開始日 YYYY-MM-DD。空なら自動で決める
@@ -101,6 +104,7 @@ func buildDeps() (application.Deps, error) {
 		Catalog: c, Revisions: c, XML: c, Updates: c, Daily: c, Bulk: c,
 		Repo:        csv.New(manifestDir),
 		Bundler:     zip.Bundler{},
+		Text:        lawxml.Renderer{},
 		Clock:       clock.System{},
 		Threshold:   sync.DefaultThresholds(),
 		Concurrency: atoiEnv("EGOV_CONCURRENCY", 1),

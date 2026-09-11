@@ -22,6 +22,17 @@ func TestParseBootstrapDefaults(t *testing.T) {
 	}
 }
 
+func TestParseTextFlags(t *testing.T) {
+	o, err := parseDaily([]string{"--text-dir", "out/text", "--text-zip-path", "out/t.zip"})
+	if err != nil || o.TextDir != "out/text" || o.TextZipPath != "out/t.zip" {
+		t.Fatalf("o=%+v err=%v", o, err)
+	}
+	b, err := parseBootstrap(nil)
+	if err != nil || b.TextDir != "bin/text" || b.TextZipPath != "bin/laws-text.zip" {
+		t.Fatalf("defaults %+v err=%v", b, err)
+	}
+}
+
 func TestParseWeeklyFlags(t *testing.T) {
 	o, err := parseWeekly([]string{"--release-tag", "sync-2", "--xml-dir", "x", "--zip-path", "z"})
 	if err != nil || o.ReleaseTag != "sync-2" || o.XMLDir != "x" || o.ZipPath != "z" {
