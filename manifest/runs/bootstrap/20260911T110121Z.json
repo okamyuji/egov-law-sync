@@ -1,0 +1,13 @@
+{
+  "kind": "bootstrap",
+  "started_at": "2026-09-11T11:01:21Z",
+  "date_jst": "2026-09-11",
+  "applied": true,
+  "total_count": 9568,
+  "counts": {
+    "text_ok": 9568,
+    "xml_ok": 9568
+  },
+  "bytes": 1185961258,
+  "seconds": 2936.763420422
+}
