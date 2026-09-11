@@ -1,6 +1,7 @@
 package application
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"testing"
@@ -87,5 +88,28 @@ func TestBundleTextSkipsWhenNothingRendered(t *testing.T) {
 	bundleText(Deps{Bundler: b}, "text", "out.zip", nil, &rec)
 	if len(b.textCalls) != 0 {
 		t.Fatalf("must skip bundling when rendered is empty: %+v", b.textCalls)
+	}
+}
+
+func TestINV9RenderFailureKeepsIndexAndExitCodeInBootstrap(t *testing.T) {
+	f := newFakes()
+	f.catalog.current = []law.Law{{ID: "A", RevisionID: "A_1", Updated: "u1"}, {ID: "B", RevisionID: "B_1", Updated: "u1"}}
+	f.catalog.future = f.catalog.current
+	f.xml.sha["A_1"] = "sha-a"
+	f.xml.sha["B_1"] = "sha-b"
+	d := f.deps()
+	d.Text = &fakeText{fail: map[law.RevisionID]bool{"A_1": true, "B_1": true}}
+	res, err := NewBootstrapper(d).Run(context.Background(), BootstrapOptions{ReleaseTag: "v0.0.1", XMLDir: t.TempDir(), TextDir: t.TempDir(), TextZipPath: "t.zip"})
+	if err != nil || res.ExitCode != 0 {
+		t.Fatalf("res=%+v err=%v", res, err)
+	}
+	if len(f.repo.xml) != 2 || f.repo.xml["A_1"].SHA256 != "sha-a" || f.repo.xml["B_1"].SHA256 != "sha-b" {
+		t.Fatalf("xml index must hold both fetched rows: %+v", f.repo.xml)
+	}
+	if res.Record.Counts["text_failed"] != 2 || res.Record.Counts["text_ok"] != 0 {
+		t.Fatalf("counts = %v", res.Record.Counts)
+	}
+	if len(f.bundler.textCalls) != 0 {
+		t.Fatal("nothing rendered, so laws-text.zip must not be built")
 	}
 }

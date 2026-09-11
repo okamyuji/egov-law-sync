@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -68,5 +71,17 @@ func TestRunNoArgs(t *testing.T) {
 	var stdout, stderr strings.Builder
 	if code := run(nil, &stdout, &stderr); code != 2 || stderr.Len() == 0 {
 		t.Fatalf("code=%d stderr=%s", code, stderr.String())
+	}
+}
+
+func TestINV11RunIngestBrokenLineExits1(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "A.jsonl"), []byte("{broken\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("EGOV_MANIFEST_DIR", filepath.Join(dir, "manifest"))
+	var out, errb bytes.Buffer
+	if code := run([]string{"ingest", dir}, &out, &errb); code != 1 || !strings.Contains(errb.String(), "A.jsonl:1") {
+		t.Fatalf("code=%d stderr=%q", code, errb.String())
 	}
 }

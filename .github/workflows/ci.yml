@@ -41,4 +41,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: grep -Eq '^[0-9]+\.[0-9]+$' VERSION || { echo "VERSION must be MAJOR.MINOR"; exit 1; }
+      - run: |
+          if [ "$(wc -l < VERSION)" != 1 ] || ! grep -Eq '^[0-9]+\.[0-9]+$' VERSION; then
+            echo "VERSION must be one MAJOR.MINOR line"
+            exit 1
+          fi

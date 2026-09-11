@@ -33,6 +33,7 @@ run_case "INV-2 other minor ignored" "0.1" $'v0.0.3\nv0.1.2' "v0.1.3" 0
 run_case "INV-2 non-semver tags ignored" "0.0" $'bootstrap-20260911T075435Z\nv0.0.2' "v0.0.3" 0
 run_case "INV-1 bad version three parts" "0.0.1" "" "" 1
 run_case "INV-1 bad version letters" "a.b" "" "" 1
+run_case "INV-1 two lines rejected" $'0.0\ngarbage' "" "" 1
 printf '0.0\n' > "$tmp/VERSION"
 out=$(cd "$tmp" && PATH="$tmp/bin:$PATH" GH_STUB_FAIL=1 bash "$here/next-version.sh" 2>/dev/null); code=$?
 if [ "$code" != "1" ]; then echo "FAIL gh failure must exit 1 (code=$code)"; fail=1; else echo "ok   gh failure"; fi

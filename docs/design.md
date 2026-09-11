@@ -187,7 +187,7 @@ zipの契約は次のとおりです。
 - index.csvの列はrevision_id、md_bytes、jsonl_bytes、chunksです。chunksはそのrevisionのjsonlの行数と一致します。
 - index.csvに載るrevisionは、mdとjsonlの両方がzipにあります。変換に失敗したrevisionはどちらにも入りません。
 
-Release本文には出典（e-Gov法令検索）、件数、対象日の範囲だけを書き、revision_idの一覧は書きません。任意のrevisionのXMLは、xml_index.csvのrelease_tagが示すReleaseの`laws-xml.zip`から`<revision_id>.xml`を取り出せます。同じReleaseの`laws-text.zip`から`<revision_id>.md`と`<revision_id>.jsonl`を取り出せます。
+Release本文には出典（e-Gov法令検索）と2つのzipの説明だけを書き、件数とrevision_idの一覧は書きません。件数はruns/のJSONにあります。任意のrevisionのXMLは、xml_index.csvのrelease_tagが示すReleaseの`laws-xml.zip`から`<revision_id>.xml`を取り出せます。同じReleaseの`laws-text.zip`から`<revision_id>.md`と`<revision_id>.jsonl`を取り出せます。
 
 ### LLM向け出力
 

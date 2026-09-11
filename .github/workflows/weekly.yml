@@ -24,7 +24,9 @@ jobs:
           gh label create anomaly --force --color B60205
           gh label create warning --force --color FBCA04
       - id: tag
-        run: echo "tag=$(bash tools/next-version.sh)" >> "$GITHUB_OUTPUT"
+        run: |
+          tag=$(bash tools/next-version.sh)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - run: make build
       - id: run
         run: |
