@@ -26,7 +26,7 @@ e-Gov法令APIが公開する法令データの改訂を、人手を介さずに
 | 得られるもの | /lawsで税法各法令の一覧と現行のrevision_idを取得します。/law_revisionsで改正履歴（施行日、公布日、改正法令番号、未施行改正の有無）を追います。/law_file/xmlで条文本文を取得します。v1のupdatelawlistsで日々の更新登録を検知します |
 | 得られないもの | 通達（国税庁の法令解釈通達、質疑応答事例）は法令ではないため、e-Gov法令APIに含まれません。実務上の税務判断で参照する通達類は別途取得する必要があります。告示と条例は対象範囲が限定的です。税法の解釈と適用判断は、この節の表にあるとおり対象外です |
 
-税法は毎年度の改正が多いため、revisions.csvの未施行改正行が主な追随対象になります。租税特別措置法は改正頻度が高く、施行日が分かれる部分施行も多いので、日次同期の「切替」と「再登録」の分類がここで多く発生する見込みです。実走後にruns/のCountsを見て、想定外200件超の閾値が現実の改正量に合っているかを確かめる必要があります（確信度は中。実測前のため）。
+税法は毎年度の改正が多いため、revisions.csvの未施行改正行が主な追随対象になります。租税特別措置法は改正頻度が高く、施行日が分かれる部分施行も多いので、日次同期の「切替」と「再登録」の分類がここで多く発生する見込みです。実走後にruns/のCountsを見て、想定外200件超の閾値が現実の改正量に合っているかを確かめます。
 
 ## 決定表
 
@@ -71,8 +71,6 @@ tools/doclint.sh                設計文書とGoコメントの機械検査
 tools/crap.sh                   CRAP値の計算
 Makefile                        help、build（CGO_ENABLED=0）、test、crap、mutate、e2e、lint、doclint、clean
 ```
-
-`bin/`、`docs/_quality/`（品質基準とセルフレビュー記録）、`docs/superpowers/`（設計のspecと実装計画）は中間成果物で、`.gitignore`によりgit管理しません。
 
 ### 層の責務とport
 
@@ -202,7 +200,7 @@ Release本文には出典（e-Gov法令検索）、件数、対象日の範囲�
 1. /lawsを全件取得し、収集件数を1ページ目のtotal_countと照合します。不一致なら、runs/bootstrap/だけを書いて終了コード3です。
 2. /laws?asof=2099-12-31を全件取得し、現在とrevision_idが異なる法令（実測で842件）を未施行改正を持つ法令とみなします。それらの法令の/law_revisionsを取得します。取得に失敗した法令IDはpending_law_idsとしてruns/に書き、次の日次が引き直します。404の法令は引き直しません。
 3. 既存のrevisions.csvがあれば読み込み、手順2の結果をrevision_idで置き換えながらマージします。first_seenは既存行の値を保持し、新規行は実行日です。
-4. 手順1で取得した一覧の全行について、law_file XMLを逐次取得します。既存のxml_index.csvがあれば読み込み、取得した行をrevision_idで置き換えながらマージします（過去のrevisionの行とrelease_tagは残ります）。release_tagには`bootstrap.yml`が渡す`--release-tag`の値を書きます。`--release-tag`が空なら本文取得を飛ばし、xml_index.csvを変えません。9567件×0.2秒で約32分の見込みです。失敗した行はxml_index.csvに書かず、件数をruns/に記録します。失敗が20件を超えたら警告です。
+4. 手順1で取得した一覧の全行について、law_file XMLを逐次取得します。既存のxml_index.csvがあれば読み込み、取得した行をrevision_idで置き換えながらマージします（過去のrevisionの行とrelease_tagは残ります）。release_tagには`bootstrap.yml`が渡す`--release-tag`の値を書きます。`--release-tag`が空なら本文取得を飛ばし、xml_index.csvを変えません。実走では9568件を44分で取得しました（並列度1）。失敗した行はxml_index.csvに書かず、件数をruns/に記録します。失敗が20件を超えたら警告です。
 5. laws.csv、revisions.csv、xml_index.csv、runs/bootstrap/を一時ファイルへ書き、renameで置き換えます。runs/bootstrap/にはtotal_countを含めます。取得したXMLが1件以上あれば、ReleaseBundlerで`bin/laws-xml.zip`を作ります。
 6. ワークフローが`bootstrap-<実行時刻>`のReleaseに取得したXMLのzipを添付し、正本をcommitしてpushします。
 
