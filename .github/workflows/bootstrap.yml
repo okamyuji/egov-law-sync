@@ -1,0 +1,48 @@
+name: bootstrap
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+  issues: write
+concurrency:
+  group: manifest
+  cancel-in-progress: false
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - id: labels
+        run: |
+          gh label create anomaly --force --color B60205
+          gh label create warning --force --color FBCA04
+      - id: tag
+        run: echo "tag=bootstrap-$(date -u +%Y%m%dT%H%M%SZ)" >> "$GITHUB_OUTPUT"
+      - run: make build
+      - id: run
+        run: |
+          set +e
+          bin/egov-law-sync bootstrap --release-tag "${{ steps.tag.outputs.tag }}" --xml-dir bin/xml
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+      - name: release
+        if: steps.run.outputs.code == '0'
+        run: |
+          if [ -f bin/laws-xml.zip ]; then
+            gh release create "${{ steps.tag.outputs.tag }}" bin/laws-xml.zip --title "${{ steps.tag.outputs.tag }}" --notes "出典: e-Gov法令検索（デジタル庁）。取得したXMLをlaws-xml.zipに含みます。"
+          fi
+      - name: commit
+        if: steps.run.outputs.code == '0' || steps.run.outputs.code == '3'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ "${{ steps.run.outputs.code }}" = "3" ]; then git add manifest/runs; else git add manifest; fi
+          git commit -m "chore(sync): bootstrap $(date -u +%F) (exit ${{ steps.run.outputs.code }})" || exit 0
+          git push
+      - name: issue
+        if: ${{ !cancelled() && steps.labels.outcome == 'success' }}
+        run: bash tools/issue.sh "${{ steps.run.outputs.code }}" manifest/runs/bootstrap "${{ job.status }}"
