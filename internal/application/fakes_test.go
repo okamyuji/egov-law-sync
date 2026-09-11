@@ -147,9 +147,22 @@ type bundleCall struct {
 	index   []law.XMLRecord
 }
 
+type textCall struct {
+	textDir string
+	outPath string
+	index   []law.TextRecord
+}
+
 type fakeBundler struct {
-	calls []bundleCall
-	err   error
+	calls     []bundleCall
+	textCalls []textCall
+	err       error
+	textErr   error
+}
+
+func (f *fakeBundler) BundleText(textDir, outPath string, index []law.TextRecord) error {
+	f.textCalls = append(f.textCalls, textCall{textDir: textDir, outPath: outPath, index: index})
+	return f.textErr
 }
 
 func (f *fakeBundler) Bundle(xmlDir, outPath string, index []law.XMLRecord) error {

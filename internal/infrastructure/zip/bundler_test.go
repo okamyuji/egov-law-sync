@@ -134,3 +134,60 @@ func TestBundleRemovesZipOnError(t *testing.T) {
 		t.Fatalf("truncated zip must be removed, stat err=%v", err)
 	}
 }
+
+func TestINV6BundleTextIndexMatchesEntries(t *testing.T) {
+	dir := t.TempDir()
+	must := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	must("A_1.md", "# a\n")
+	must("A_1.jsonl", "{}\n{}\n")
+	must("B_1.md", "# b\n") // jsonlが無い: index.csvにもzipにも載せない
+	out := filepath.Join(t.TempDir(), "laws-text.zip")
+	index := []law.TextRecord{
+		{RevisionID: "A_1", MDBytes: 4, JSONLBytes: 6, Chunks: 2},
+		{RevisionID: "B_1", MDBytes: 4},
+		{RevisionID: "MISSING", MDBytes: 1, JSONLBytes: 1, Chunks: 1},
+	}
+	if err := (Bundler{}).BundleText(dir, out, index); err != nil {
+		t.Fatal(err)
+	}
+	r, err := archivezip.OpenReader(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	names := map[string]bool{}
+	for _, f := range r.File {
+		names[f.Name] = true
+	}
+	if !names["A_1.md"] || !names["A_1.jsonl"] || names["B_1.md"] || names["MISSING.md"] {
+		t.Fatalf("entries = %v", names)
+	}
+	want := "revision_id,md_bytes,jsonl_bytes,chunks\nA_1,4,6,2\n"
+	if got := readEntry(t, r, "index.csv"); got != want {
+		t.Fatalf("index.csv = %q", got)
+	}
+	if got := readEntry(t, r, "A_1.jsonl"); strings.Count(got, "\n") != 2 {
+		t.Fatalf("jsonl lines = %d", strings.Count(got, "\n"))
+	}
+}
+
+func TestBundleTextRemovesZipOnError(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "A_1.md"), 0o755); err != nil { // ディレクトリを読ませてEISDIRにする
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "A_1.jsonl"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(t.TempDir(), "laws-text.zip")
+	if err := (Bundler{}).BundleText(dir, out, []law.TextRecord{{RevisionID: "A_1"}}); err == nil {
+		t.Fatal("expected error")
+	}
+	if _, err := os.Stat(out); !os.IsNotExist(err) {
+		t.Fatal("zip must be removed on error")
+	}
+}
