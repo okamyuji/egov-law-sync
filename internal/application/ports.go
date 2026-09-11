@@ -77,9 +77,20 @@ type ManifestRepository interface {
 	LastDaily() (RunRecord, bool, error)
 }
 
-// ReleaseBundler xmlDirの<rev>.xmlとindex.csvをoutPathのzipにまとめる
+// TextRenderer xmlDirの<revision_id>.xmlを読み、textDirへ<revision_id>.mdと<revision_id>.jsonlを書く。両方書けたときだけ成功
+type TextRenderer interface {
+	Render(xmlDir, textDir string, meta law.Law) (law.TextRecord, error)
+}
+
+// ChunkSource dir直下の*.jsonlをファイル名順に読み、1行ずつfnに渡す。fnのerrorで止まる
+type ChunkSource interface {
+	Each(dir string, fn func(law.Chunk) error) error
+}
+
+// ReleaseBundler Release添付のzipを作る。Bundleは<rev>.xml、BundleTextは<rev>.mdと<rev>.jsonl。どちらもindex.csvを含む
 type ReleaseBundler interface {
 	Bundle(xmlDir, outPath string, index []law.XMLRecord) error
+	BundleText(textDir, outPath string, index []law.TextRecord) error
 }
 
 // Clock 実行時刻。テストのために固定できるようにする

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Law Era="Reiwa" Lang="ja" LawType="Act" Num="002" Year="8">
+  <LawNum>令和八年法律第二号</LawNum>
+  <LawBody>
+    <LawTitle>予備テスト法</LawTitle>
+    <MainProvision>
+      <Article Num="1">
+        <ArticleTitle>第一条</ArticleTitle>
+        <Paragraph Num="1">
+          <ParagraphNum/>
+          <ParagraphSentence><Sentence>本文である。</Sentence></ParagraphSentence>
+          <List>
+            <ListSentence><Sentence>一覧の一文である。</Sentence></ListSentence>
+          </List>
+          <Item Num="1">
+            <ItemTitle>一</ItemTitle>
+            <ItemSentence><Sentence>号の本文である。</Sentence></ItemSentence>
+            <TableStruct>
+              <Table>
+                <TableRow><TableColumn><Sentence>左の欄</Sentence></TableColumn><TableColumn><Sentence>右の欄</Sentence></TableColumn></TableRow>
+              </Table>
+            </TableStruct>
+          </Item>
+          <Remarks>
+            <RemarksLabel>備考</RemarksLabel>
+            <Sentence>備考の一文である。</Sentence>
+          </Remarks>
+        </Paragraph>
+        <Paragraph Num="2">
+          <ParagraphNum/>
+          <ParagraphSentence><Sentence>第二項の本文である。</Sentence></ParagraphSentence>
+        </Paragraph>
+      </Article>
+      <AmendProvision>
+        <AmendProvisionSentence><Sentence>改正の一文である。</Sentence></AmendProvisionSentence>
+      </AmendProvision>
+    </MainProvision>
+    <SupplProvision AmendLawNum="令和八年法律第三号">
+      <SupplProvisionLabel>附　則</SupplProvisionLabel>
+      <Chapter Num="1">
+        <ChapterTitle>第一章　経過</ChapterTitle>
+        <Article Num="1">
+          <ArticleTitle>第一条</ArticleTitle>
+          <Paragraph Num="1">
+            <ParagraphNum/>
+            <ParagraphSentence><Sentence>経過を定める。</Sentence></ParagraphSentence>
+          </Paragraph>
+        </Article>
+      </Chapter>
+    </SupplProvision>
+  </LawBody>
+</Law>
