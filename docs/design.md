@@ -1,6 +1,6 @@
 # egov-law-sync設計書
 
-e-Gov法令APIが公開する法令データの改訂を、人手を介さずに追随するための仕組みです。数値と挙動の根拠はすべて[計測記録](measurements.md)にあります。計測は2026年9月11日に行いました。版はv6で、レビュー6回目までの指摘を反映して凍結しています。
+e-Gov法令APIが公開する法令データの改訂を、人手を介さずに追随するための仕組みです。数値と挙動の根拠はすべて[計測記録](measurements.md)にあります。計測は2026年9月11日に行いました。版はv7です。v6までの凍結内容に、Releaseのsemantic version、LLM向け出力、vectorDBの口、不変条件を足しています。
 
 ## 目的
 
@@ -92,7 +92,10 @@ application層が定義するportは次のとおりです。infrastructure層が
 | DailyArchive | sec3 zipの取得。500は「無し」として返し、200ならディレクトリ名の一覧を返す | egov、zip |
 | BulkArchive | sec1 zipの取得と展開 | egov、zip |
 | ManifestRepository | 3つのCSVとruns/の読み書き | csv |
-| ReleaseBundler | XMLの一時保存先ディレクトリからRelease添付用zipを作る | zip |
+| ReleaseBundler | XMLの一時保存先からlaws-xml.zipを、MarkdownとJSONLの一時保存先からlaws-text.zipを作る | zip |
+| TextRenderer | XML1件をMarkdownと条単位のJSONLに変換し、両方を原子的に書く | lawxml |
+| ChunkSource | JSONLをファイル名順に1行ずつ読む | lawxml |
+| ChunkSink | 条単位のチャンクを任意のvectorDBへ登録する口。既定はno-op | sink/noop |
 | Clock | JSTの現在日時 | 標準ライブラリを包む小さな実装 |
 
 日次の手順8にある差分通知の呼び出し位置は、application層の関数1つです。初回スコープでは何もしません。portにはしません。
@@ -166,10 +169,9 @@ Actionsのワークフローは`okamyuji/reusable-workflows@v1`のGo CIとsecuri
 
 | タグ | 作成タイミング | 添付 |
 |---|---|---|
-| `bootstrap-YYYYMMDDTHHMMSSZ` | bootstrap実行時 | 全法令の現行revisionのXMLとindex.csvをまとめたzip |
-| `sync-YYYYMMDDTHHMMSSZ` | 日次または週次で本文を1件でも取得した実行 | 取得したXMLとindex.csvをまとめたzip |
+| `v<MAJOR>.<MINOR>.<PATCH>` | bootstrap、日次、週次で本文を1件でも取得した実行 | 取得したXMLとindex.csvをまとめた`laws-xml.zip`と、同じ法令のMarkdownとJSONLをまとめた`laws-text.zip` |
 
-タグは実行時刻なので重複せず、上書きは行いません。タグはワークフローが決めてCLIに`--release-tag`で渡し、CLIはxml_index.csvのrelease_tagにその値を書きます。CLIは取得したXMLを`--xml-dir`のディレクトリに`<revision_id>.xml`として書き、ReleaseBundlerがそのディレクトリからzipを作ります。bootstrapでは約3.2GBがディスクに置かれますが、Actionsのディスク約14GBに収まります。
+タグはsemantic versionです。`MAJOR.MINOR`はリポジトリ直下の`VERSION`（現在は`0.0`）が持ち、PRでだけ変えます。`PATCH`は`tools/next-version.sh`が既存Releaseのタグから同じ`MAJOR.MINOR`の最大値を求めて1を足します。既存タグが無ければ1です。bootstrap、日次、週次は同じ1系列に入り、Releaseのタイトルはタグ、種別、JST日付を空白で区切って書きます。Releaseを手で削除するとPATCHが再利用され、過去のrelease_tagが別の内容を指すので、Releaseは削除しません。タグはワークフローが決めてCLIに`--release-tag`で渡し、CLIはxml_index.csvのrelease_tagにその値を書きます。公開直後に作った`bootstrap-<UTC時刻>`のReleaseは、この規則の前のものとして残しています。CLIは取得したXMLを`--xml-dir`のディレクトリに`<revision_id>.xml`として書き、ReleaseBundlerがそのディレクトリからzipを作ります。bootstrapでは約3.2GBがディスクに置かれますが、Actionsのディスク約14GBに収まります。
 
 zipの契約は次のとおりです。
 
@@ -179,7 +181,34 @@ zipの契約は次のとおりです。
 - index.csvには、`--xml-dir`のディレクトリに実際にあったファイルの行だけが載ります。取得に失敗して書かれなかったXMLの行は、zipにもindex.csvにも入りません。
 - zip後のサイズは、sec1 zipの324MBと展開後3.6GBの比から、bootstrapで約290MBの見込みです。
 
-Release本文には出典（e-Gov法令検索）、件数、対象日の範囲だけを書き、revision_idの一覧は書きません。任意のrevisionのXMLは、xml_index.csvのrelease_tagが示すReleaseの`laws-xml.zip`から`<revision_id>.xml`を取り出せます。
+`laws-text.zip`の契約は次のとおりです。
+
+- zip内は平坦で、`<revision_id>.md`、`<revision_id>.jsonl`、`index.csv`だけを含みます。
+- index.csvの列はrevision_id、md_bytes、jsonl_bytes、chunksです。chunksはそのrevisionのjsonlの行数と一致します。
+- index.csvに載るrevisionは、mdとjsonlの両方がzipにあります。変換に失敗したrevisionはどちらにも入りません。
+
+Release本文には出典（e-Gov法令検索）、件数、対象日の範囲だけを書き、revision_idの一覧は書きません。任意のrevisionのXMLは、xml_index.csvのrelease_tagが示すReleaseの`laws-xml.zip`から`<revision_id>.xml`を取り出せます。同じReleaseの`laws-text.zip`から`<revision_id>.md`と`<revision_id>.jsonl`を取り出せます。
+
+### LLM向け出力
+
+取得したXMLは、同じ実行の中でMarkdownと条単位のJSONLに変換します。JSONLの1行は条1つで、キーは次のとおりです。
+
+| キー | 内容 | 例 |
+|---|---|---|
+| law_id | 法令ID | `322AC0000000049` |
+| revision_id | revision_id | `322AC0000000049_20260717_508AC0000000060` |
+| law_title | 法令名 | `労働基準法` |
+| law_num | 法令番号 | `昭和二十二年法律第四十九号` |
+| enforcement_date | 施行日（laws.csvの値） | `2026-07-17` |
+| path | 本則の編、章、節、款を`/`で結んだ位置。附則は`附則（<改正法令番号>）` | `第二章/第一節` |
+| article | 条の番号。附則の条に属さない項は空 | `第三十二条` |
+| article_title | 条の見出し。括弧は外す | `労働時間` |
+| text | 条の本文。項は改行で区切り、号は行頭に号名を付けて並べる。表は行ごとに列を`｜`で結ぶ | |
+| source_url | `https://laws.e-gov.go.jp/law/<law_id>` | |
+
+Markdownは、先頭にYAML front matter（law_id、revision_id、law_title、law_num、enforcement_date、source_url、generated_by）を置き、法令名を`#`、本則の階層を`##`から1段ずつ深く、条を常に`####`にします。条の見出しは条番号に見出しをそのまま続けます。項は1段落で、第2項以降は項番号を前置します。項番号の要素が空（旧表記の法令）でParagraphのNum属性が2以上なら、Num属性を全角数字にして前置します。号は号名を先頭に置いた箇条書きで、下位の号は1段下げます。ふりがな（Rt）は捨てて本文だけを残します。表はMarkdownの表にせず、行ごとに列を`｜`で結んだ1行にします。附則は`## 附則（<改正法令番号>）`、別表は`## 別表（<別表名>）`で、目次は出力しません。上に無い要素（List、Remarks、FigStruct、Note、号の中の表、附則の中の章など）は、配下の文を出現順にそのまま段落として出します。見出しの体裁より文を落とさないことを優先します。
+
+変換の失敗はxml_index.csvと終了コードには影響させず、runs/の`text_failed`に数えます。変換できた分は`--text-dir`（既定`bin/text`）に`<revision_id>.md`と`<revision_id>.jsonl`として書き、両方揃ったときだけ成功とします。`--text-zip-path`（既定`bin/laws-text.zip`）にまとめ、ワークフローが`laws-xml.zip`と同じReleaseに添付します。
 
 ## 処理の流れ
 
@@ -189,7 +218,7 @@ Release本文には出典（e-Gov法令検索）、件数、対象日の範囲�
 - HTTPは1リクエストのタイムアウト60秒（sec1 zipは600秒）、失敗時は2秒、4秒の間隔で最大3回再試行します。
 - 再試行後も失敗した取得は、原因をstderrに出します。1回の実行で先頭10件だけ出し、残りは最後に件数を1行で出します。成功は出しません。runs/のJSONには件数だけが残るので、原因はActionsのログで追います。
 - CLIの終了コードは、正常0、異常3、使い方の誤り2、それ以外のエラー1です。終了コード2は引数の誤り（サブコマンドが無い、未知のサブコマンド、未知のフラグ）で返します。終了コード0でも警告があればruns/にその内容が入ります。ワークフローは0と3以外の終了コード（2、1、強制終了）をすべて同じ失敗経路として扱い、Issueを作ったうえでジョブを失敗させます。
-- CLIのオプションは`--from`、`--to`、`--force`、`--release-tag`、`--xml-dir`（既定値`bin/xml`）、`--zip-path`（既定値`bin/laws-xml.zip`）です。`--from`と`--to`はv1の一覧を取る対象日にだけ影響し、/lawsの比較と本文取得は常に実行時点の/lawsに対して行います。
+- CLIのオプションは`--from`、`--to`、`--force`、`--release-tag`、`--xml-dir`（既定値`bin/xml`）、`--zip-path`（既定値`bin/laws-xml.zip`）、`--text-dir`（既定値`bin/text`。空なら変換しない）、`--text-zip-path`（既定値`bin/laws-text.zip`）です。サブコマンドはbootstrap、daily、weeklyに加えて`ingest <text-dir>`があり、ingestは正本に触れず、JSONLをChunkSinkへ流すだけです。本文取得と変換は500件ごとに進捗を1行stderrへ出します。`--from`と`--to`はv1の一覧を取る対象日にだけ影響し、/lawsの比較と本文取得は常に実行時点の/lawsに対して行います。
 - 環境変数は次の5つです。`EGOV_V2_BASE`（既定値`https://laws.e-gov.go.jp/api/2`）、`EGOV_V1_BASE`（既定値`https://elaws.e-gov.go.jp/api/1`）、`EGOV_BULK_BASE`（既定値`https://laws.e-gov.go.jp`）、`EGOV_CONCURRENCY`（本文取得の並列度、既定値1）、`EGOV_MANIFEST_DIR`（正本の置き場所、既定値`manifest`）です。
 - ワークフローの手順は「CLI実行、Releaseの作成と添付、commit、push」の順です。Releaseの作成に失敗すればcommitせずにジョブを失敗させ、次回の実行が本文を取り直します。pushが競合で失敗した場合もジョブを失敗させ、次回の実行が同じ範囲を再処理します。CLIが0で終わった後にジョブが失敗した場合も、Issueの手順はキャンセル以外で常に実行され、ジョブの状態を見てラベル`anomaly`のIssueを作ります。Releaseだけが残っても正本は参照しないので害はありません。
 - ワークフローは終了コードを変数に取ります。3のときはruns/だけをcommitしてラベル`anomaly`のIssueを作ります。0でも3でもないときは、ラベル`anomaly`のIssueだけを作ります。0で警告があるときは、commitのあとにラベル`warning`のIssueを作ります。2つのラベルは、ワークフローの先頭で`gh label create --force`により毎回作ります（既にあれば何もしません）。同じラベルのIssueが開いていれば、新しいIssueは作らずそのIssueにコメントを追加するので、異常と警告は互いに埋もれません。
@@ -201,8 +230,9 @@ Release本文には出典（e-Gov法令検索）、件数、対象日の範囲�
 2. /laws?asof=2099-12-31を全件取得し、現在とrevision_idが異なる法令（実測で842件）を未施行改正を持つ法令とみなします。それらの法令の/law_revisionsを取得します。取得に失敗した法令IDはpending_law_idsとしてruns/に書き、次の日次が引き直します。404の法令は引き直しません。
 3. 既存のrevisions.csvがあれば読み込み、手順2の結果をrevision_idで置き換えながらマージします。first_seenは既存行の値を保持し、新規行は実行日です。
 4. 手順1で取得した一覧の全行について、law_file XMLを逐次取得します。既存のxml_index.csvがあれば読み込み、取得した行をrevision_idで置き換えながらマージします（過去のrevisionの行とrelease_tagは残ります）。release_tagには`bootstrap.yml`が渡す`--release-tag`の値を書きます。`--release-tag`が空なら本文取得を飛ばし、xml_index.csvを変えません。実走では9568件を44分で取得しました（並列度1）。失敗した行はxml_index.csvに書かず、件数をruns/に記録します。失敗が20件を超えたら警告です。
-5. laws.csv、revisions.csv、xml_index.csv、runs/bootstrap/を一時ファイルへ書き、renameで置き換えます。runs/bootstrap/にはtotal_countを含めます。取得したXMLが1件以上あれば、ReleaseBundlerで`bin/laws-xml.zip`を作ります。
-6. ワークフローが`bootstrap-<実行時刻>`のReleaseに取得したXMLのzipを添付し、正本をcommitしてpushします。
+5. 取得できたrevisionをTextRendererでMarkdownとJSONLに変換し、`--text-dir`へ書きます。失敗は`text_failed`に数え、20件を超えたら警告です。
+6. laws.csv、revisions.csv、xml_index.csv、runs/bootstrap/を一時ファイルへ書き、renameで置き換えます。runs/bootstrap/にはtotal_countを含めます。取得したXMLが1件以上あれば、ReleaseBundlerで`bin/laws-xml.zip`を作ります。変換できたrevisionが1件以上あれば`bin/laws-text.zip`を作ります。
+7. ワークフローが次のバージョンタグのReleaseに2つのzipを添付し、正本をcommitしてpushします。
 
 bootstrapは`bootstrap.yml`を手動起動して実行します。再実行すると本文は全件取り直しになりますが、xml_index.csvとrevisions.csvはどちらもマージなので過去の行は残ります。HTTPの失敗が3回再試行後も続く場合は終了コード1で終わり、何も書きません。
 
@@ -220,9 +250,10 @@ bootstrapは`bootstrap.yml`を手動起動して実行します。再実行す�
 4. 手順1の法令ID、手順3の新規と切替と再登録の法令ID、前回のruns/のpending_law_idsについて、/law_revisionsを取得します。revisions.csvに書く内容は、既存行をrevision_idで置き換え（first_seenは保持）、無い行を追加したものです。取得に失敗した法令IDはpending_law_idsとしてruns/に書き、警告にします。/law_revisionsが404を返した法令はAPIから消えているので、pending_law_idsに残さずcountsのrevision_goneだけを増やします。
 5. 切替のうち、新しいrevision_idが実行開始時に読み込んだrevisions.csvにあるものを想定内とします。想定内以外の件数は、新規、消失、再登録、想定内でない切替の合計です。この件数が200件を超えたら異常です。1ページ目のtotal_countが前回の値より1%超少ない場合も異常です。異常のときは3つのCSVを書かず、runs/だけを書いて終了コード3で終わります。手順4で取得した法令IDはrevisions.csvに残らないので、すべてpending_law_idsに書きます。Issue本文には変更の一覧の先頭200行を載せます。
 6. `--release-tag`が空なら本文取得を飛ばします。それ以外は、新しいlaws.csvの各行について、xml_index.csvに無いか、updatedが異なるなら、law_file XMLを逐次取得し、sha256とxml_bytesを計算します。失敗した行は記録だけして次へ進みます。失敗が20件を超えたら警告です。
-7. laws.csv、revisions.csv、xml_index.csv、runs/daily/を一時ファイルへ書き、renameで置き換えます。appliedはtrueです。xml_index.csvのrelease_tagには`--release-tag`の値を書きます。手順6で取得したXMLが1件以上あれば、ReleaseBundlerで`bin/laws-xml.zip`を作ります。
+7. 手順6で取得できたrevisionをMarkdownとJSONLに変換し、`--text-dir`へ書きます。失敗は`text_failed`に数え、20件を超えたら警告です。
+8. laws.csv、revisions.csv、xml_index.csv、runs/daily/を一時ファイルへ書き、renameで置き換えます。appliedはtrueです。xml_index.csvのrelease_tagには`--release-tag`の値を書きます。手順6で取得したXMLが1件以上あれば、ReleaseBundlerで`bin/laws-xml.zip`を作ります。変換できたrevisionが1件以上あれば`bin/laws-text.zip`を作ります。
 8. 差分通知の呼び出し位置です。初回スコープでは何もしません。
-9. 終了コード0で終わります。ワークフローは、手順6で1件でも取得していれば`sync-<実行時刻>`のReleaseにXMLのzipを添付し、正本をcommitしてpushします。警告があればIssueを作ります。
+9. 終了コード0で終わります。ワークフローは、手順6で1件でも取得していれば次のバージョンタグのReleaseに2つのzipを添付し、正本をcommitしてpushします。警告があればIssueを作ります。
 
 Actionsのワークスペースは実行ごとに破棄されるので、途中で止まった実行の中間状態はリポジトリに残りません。
 
@@ -232,7 +263,7 @@ Actionsのワークスペースは実行ごとに破棄されるので、途中�
 2. laws.csvのうちrepeal_statusがNoneの行について、zip内の`<revision_id>/<revision_id>.xml`のsha256を計算し、xml_index.csvのsha256と比較します。xml_index.csvに無い行は飛ばします。
 3. `--release-tag`が空なら手順3を飛ばします。不一致の行については、law_file XMLを取得し直します。取得したXMLのsha256がxml_index.csvと同じなら「zipが古い」として件数だけ記録します。異なるならxml_index.csvのupdated（laws.csvの現在の値）、sha256、xml_bytes、release_tagを更新し、XMLをReleaseに含めます。取得の失敗が20件を超えたら警告です。
 4. zipに無いrevision（実測で廃止・失効以外に66件）とzipにあってlaws.csvに無いrevisionは件数だけ記録します。
-5. xml_index.csvとruns/weekly/を書きます。手順3で差し替えたXMLが1件以上あれば、ReleaseBundlerで`bin/laws-xml.zip`を作ります。終了コード0で終わります。ワークフローは、手順3で取得したXMLがあれば`sync-<実行時刻>`のReleaseを作り、正本をcommitしてpushします。HTTPの失敗が続く場合は終了コード1です。
+5. 手順3で取り直したrevisionをMarkdownとJSONLに変換し、`--text-dir`へ書きます。xml_index.csvとruns/weekly/を書きます。手順3で差し替えたXMLが1件以上あれば、ReleaseBundlerで`bin/laws-xml.zip`を作り、変換できた分で`bin/laws-text.zip`を作ります。終了コード0で終わります。ワークフローは、手順3で取得したXMLがあれば次のバージョンタグのReleaseを作り、正本をcommitしてpushします。HTTPの失敗が続く場合は終了コード1です。
 
 週次には異常判定がありません。週次はxml_index.csvとReleaseを直接直します。
 
@@ -264,6 +295,8 @@ ActionsのcronはUTCで書きます。
 | 警告 | v1に無い更新がsec3にある | v1が404の日にsec3が200でディレクトリが1つ以上 | 09-10の照合で両者は同じ集合でした。v1の終了や障害をこの警告で知ります |
 | 警告 | /law_revisionsが取得できない法令がある | 404以外で3回再試行後の失敗が1件以上 | 失敗した法令IDは次回に引き直すので欠落は残りません。404は法令がAPIから消えたことを示すので、引き直さずrevision_goneとして数えるだけにします。引き直すと同じ警告が毎日出続けます |
 | 警告 | 本文取得の失敗が多い（bootstrap、daily、weeklyの3つとも） | 3回再試行後の失敗が20件超 | 個別取得は0.2秒で安定していました。少数の失敗は翌日に再取得します |
+| 警告 | MarkdownとJSONLへの変換の失敗が多い（3つとも） | 失敗が20件超（`text_failures`） | 変換はXMLの構造を写すだけで、失敗はxml_index.csvに影響しません。翌日以降に本文を取り直したときに変換し直します |
+| 警告 | laws-text.zipを作れない | BundleTextの失敗（`text_bundle_failed`） | zipは正本ではないので実行は成功させ、次回の実行で作り直します |
 
 ## 通知
 
@@ -276,6 +309,12 @@ Slack Incoming Webhookを使う場合の形は次のとおりです。
 - 異常や警告のIssueを作った日は、IssueのURLを投稿します。
 
 月次チェックなどの業務ロジックが参照している法令IDの一覧と突き合わせれば、見直しが必要な法令だけを通知する使い方もできます。
+
+## vectorDBの口
+
+条単位のチャンクを任意のvectorDBへ登録する口として、application層にport`ChunkSink`を置きます。メソッドは`Put`の1つで、contextとChunkの配列を受け取り、errorを返します。既定の実装は`infrastructure/sink/noop`で、件数を数えてstderrに出すだけです。CLIの`ingest <text-dir>`は、ディレクトリ直下の`*.jsonl`をファイル名順に読み、100件ずつ`Put`に渡します。JSONとして読めない行があればその時点で止まり終了コード1です。`Put`の失敗も終了コード1です。ingestはワークフローからは呼ばず、利用者が自分の環境で実行します。
+
+利用者は`internal/infrastructure/sink/<name>/sink.go`を1ファイル足し、`cmd/egov-law-sync/main.go`の`buildDeps`の`Sink`を差し替えます。embeddingの計算とAPIキーの扱いはsink側の責務です。同じ条の再登録は`revision_id`と`article`を結合した値をキーにした上書きにします。
 
 ## テスト
 
@@ -296,6 +335,25 @@ Slack Incoming Webhookを使う場合の形は次のとおりです。
 | `make e2e` | 主要導線5本 | 全件成功 | go test ./e2e/... |
 
 CRAP値はカバレッジ80%のもとでは循環的複雑度13以下とほぼ同じ意味になり（cc=13で14.4、cc=14で15.6）、複雑な関数を分割させます。mutation testingをdomain層に限るのは、差分の分類や閾値や日付範囲の純粋関数が境界値の誤りを単体テストで見逃しやすい場所であり、infrastructure層の変異はE2Eで導線ごと検証する方が費用対効果が高いためです。gocycloとgremlinsは`go run`で版を固定して呼び、go.modには入れません。
+
+## 不変条件
+
+設計と実装は次の条件を満たします。各条件には、違反すると失敗するテストまたはCIのゲートを対応させます。改訂ではこの表を先に更新してから設計と実装を変えます。レビューは「条件ごとに対応する検証があり、それが通っているか」を確認します。
+
+| ID | 不変条件 | 検証 |
+|---|---|---|
+| INV-1 | `VERSION`の内容は`^[0-9]+\.[0-9]+$`の1行である | ci.ymlの`version`ジョブ、`tools/next-version_test.sh` |
+| INV-2 | 次のタグは、同じ`MAJOR.MINOR`を持つ既存タグのPATCH最大値に1を足した値である。無ければ1である | `tools/next-version_test.sh` |
+| INV-3 | ワークフローが作るReleaseのタグは`^v[0-9]+\.[0-9]+\.[0-9]+$`に一致し、重複しない | `tools/next-version_test.sh`と3ワークフローが同じスクリプトを呼ぶこと |
+| INV-4 | 1つのrevisionについて、mdとjsonlは両方存在するか両方存在しない | `TestINV4NoMdWhenJsonlCannotBeWritten`、`TestINV4NoJsonlWhenMdCannotBeWritten` |
+| INV-5 | jsonlの各行はChunkとして読め、law_id、revision_id、textは空でなく、revision_idはファイル名と一致する | `TestINV5ChunkJSONKeys`、`TestINV5EveryChunkHasRequiredFields`、E2Eのlaws-text.zip検査 |
+| INV-6 | index.csvのchunks列はjsonlの行数と一致し、載るrevisionはmdとjsonlの両方がzipにある | `TestINV6BundleTextIndexMatchesEntries`、E2E |
+| INV-7 | XMLのLawBody配下（本則、附則、別表、附図、様式などすべて）のすべてのSentenceのテキストは、順序を保ってMarkdownに含まれ、Rtのテキストは含まれない | `TestINV7AllSentencesAppearInOrderSample`、同RealLaw、同FallbackKeepsEverySentence。`EGOV_CORPUS_DIR`を指定した`TestINV7CorpusFromDir`で任意の実XML群にも同じ検査を行える |
+| INV-8 | 同じXMLと同じmetaからの変換結果はバイト単位で同一である | `TestINV8MarkdownMatchesGolden`、`TestINV8ChunksMatchGolden` |
+| INV-9 | 変換の失敗はxml_index.csvと終了コードを変えない。`text_failed`と`text_failures`にだけ表れる | `TestINV9TextFailureDoesNotTouchIndexOrExitCode` |
+| INV-10 | 変換が書くファイルは`<revision_id>.md`と`<revision_id>.jsonl`だけで、`--text-dir`の外には書かない | `TestINV10RenderWritesOnlyMdAndJsonl` |
+| INV-11 | ingestは100件以下のまとまりで順序を保ってPutを呼び、合計は読んだ行数に等しい。壊れた行でそれ以降のPutを呼ばず終了コード1で終わる | `TestINV11BatchesOf100InOrder`、`TestINV11StopsAtBrokenLine` |
+| INV-12 | applicationとdomainはinfrastructureとcmdをimportしない | `tools/layers.sh`（`make lint`） |
 
 ## 未確定
 

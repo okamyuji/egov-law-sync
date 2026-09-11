@@ -149,9 +149,12 @@ make build                                                          # CGOなし�
 bin/egov-law-sync bootstrap                                         # 初回。/lawsとlaw_fileからmanifestを作る
 bin/egov-law-sync daily --from 2026-09-09 --to 2026-09-10           # 範囲の差分を取り込む（省略時は前回適用済みの翌日からJSTの前日まで）
 bin/egov-law-sync weekly                                            # sec1 zipとxml_index.csvを照合する
+bin/egov-law-sync ingest bin/text                                   # MarkdownとJSONLの置き場からChunkSinkへ登録する（既定はno-op）
 ```
 
-共通のオプションは`--release-tag`、`--xml-dir`（既定値`bin/xml`）、`--zip-path`（既定値`bin/laws-xml.zip`）です。`daily`はさらに`--from`、`--to`、`--force`を受け取ります。
+共通のオプションは`--release-tag`、`--xml-dir`（既定値`bin/xml`）、`--zip-path`（既定値`bin/laws-xml.zip`）、`--text-dir`（既定値`bin/text`。空なら変換しない）、`--text-zip-path`（既定値`bin/laws-text.zip`）です。`daily`はさらに`--from`、`--to`、`--force`を受け取ります。
+
+Releaseのタグは`v0.0.1`のようなsemantic versionです。`MAJOR.MINOR`はリポジトリ直下の`VERSION`が持ち、変えるときは`VERSION`を書き換えるPRを出します。`PATCH`は実行のたびに既存のReleaseから自動で採番します。各Releaseには`laws-xml.zip`（取得したXMLとindex.csv）と`laws-text.zip`（同じ法令の`<revision_id>.md`、`<revision_id>.jsonl`、index.csv）が付きます。Markdownは先頭にlaw_id、revision_id、施行日、出典URLのfront matterを持ち、条を`####`の見出しにした本文が続きます。JSONLは1行が1条で、法令ID、revision_id、法令名、施行日、位置、条番号、見出し、本文、出典URLを持ちます。
 
 終了コードは4つです。
 
@@ -176,11 +179,68 @@ bin/egov-law-sync weekly                                            # sec1 zip�
 
 ローカルで実行した場合、`--release-tag`が空なので本文XMLの取得は行われず、laws.csv、revisions.csv、runs/だけが書き換わります。ローカル実行の結果はcommitしないでください。runs/をcommitすると次回のActionsの対象日がずれます。commitとReleaseの作成はGitHub Actionsのワークフローが行います。
 
-GitHub Actionsでは`bootstrap.yml`を手動で1回起動し、その後は`daily.yml`が毎日07:00 JSTに、`weekly.yml`が毎週日曜08:00 JSTに動きます。正常時は3つのCSVを自動commitし、異常判定に該当した日はCSVを変えずにラベル`anomaly`のIssueを作ります。人が内容を確認したうえで適用する場合は、`daily.yml`を手動起動して`--force`を渡します。CIは`okamyuji/reusable-workflows@v1`のGo CIとsecurity-scanに加えて、`make doclint`、`make e2e`、`make crap`、`make mutate`を実行します。
+GitHub Actionsでは`bootstrap.yml`を手動で1回起動し、その後は`daily.yml`が毎日07:00 JSTに、`weekly.yml`が毎週日曜08:00 JSTに動きます。正常時は3つのCSVを自動commitし、異常判定に該当した日はCSVを変えずにラベル`anomaly`のIssueを作ります。人が内容を確認したうえで適用する場合は、`daily.yml`を手動起動して`--force`を渡します。CIは`okamyuji/reusable-workflows@v1`のGo CIとsecurity-scanに加えて、`VERSION`の形式検査、`make doclint`、`make quality`を実行します。
 
 ### 開発時の検査
 
 `make install-hooks`を一度実行すると、commitの前に`scripts/quality-gate.sh`が走ります。内容はgofmt、go vet、層の依存検査、staticcheck、golangci-lint、govulncheck、go build、shellテスト、doclint、go test（`-count=1 -shuffle=on -race`、カバレッジ80%以上）、CRAP値、mutation testing、E2E、gitleaksです。CIの`gates`ジョブも同じスクリプトを実行します。手で走らせるときは`make quality`です。staticcheck、golangci-lint、govulncheckは事前にインストールしておきます。
+
+## 任意のvectorDBへ登録する
+
+`laws-text.zip`を展開したディレクトリ（または実行後の`bin/text`）を`ingest`に渡すと、JSONLを1行ずつ読んで100件ずつ`ChunkSink`に渡します。既定のsinkは何も登録せず件数をstderrに出すだけなので、まずこれで読めることを確かめます。
+
+```sh
+unzip -q laws-text.zip -d text
+bin/egov-law-sync ingest text
+```
+
+登録先を足すには、`internal/infrastructure/sink/<name>/sink.go`を1ファイル作り、`cmd/egov-law-sync/main.go`の`buildDeps`にある`Sink: &noop.Sink{}`を自分のsinkに差し替えます。interfaceは次のとおりです。
+
+```go
+type ChunkSink interface {
+	Put(ctx context.Context, chunks []law.Chunk) error
+}
+```
+
+`law.Chunk`のキーはlaw_id、revision_id、law_title、law_num、enforcement_date、path、article、article_title、text、source_urlです。embeddingの計算とAPIキーの扱いはsink側で行います。同じ条の再登録は`revision_id`と`article`を結合した値を主キーにして上書きします。このリポジトリは`go.mod`に依存を足さない方針なので、database/sqlのドライバやHTTPクライアントを使うsinkは別モジュールに置くか、forkで足します。
+
+pgvectorの例です。
+
+```sql
+CREATE TABLE law_chunks (
+  id text PRIMARY KEY,
+  law_id text NOT NULL,
+  revision_id text NOT NULL,
+  law_title text NOT NULL,
+  enforcement_date date,
+  path text,
+  article text,
+  article_title text,
+  body text NOT NULL,
+  embedding vector(1536)
+);
+```
+
+```go
+func (s *Sink) Put(ctx context.Context, chunks []law.Chunk) error {
+	for _, c := range chunks {
+		vec, err := s.embed(ctx, c.Text)
+		if err != nil {
+			return err
+		}
+		id := string(c.RevisionID) + "|" + c.Article
+		if _, err := s.db.ExecContext(ctx, `INSERT INTO law_chunks (id, law_id, revision_id, law_title, enforcement_date, path, article, article_title, body, embedding)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			ON CONFLICT (id) DO UPDATE SET body = EXCLUDED.body, embedding = EXCLUDED.embedding, enforcement_date = EXCLUDED.enforcement_date`,
+			id, c.LawID, c.RevisionID, c.LawTitle, c.EnforcementDate, c.Path, c.Article, c.ArticleTitle, c.Text, vec); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+```
+
+Qdrantの例では、`PUT /collections/laws/points`に`{"points":[{"id":"<revision_idとarticleから作ったUUID>","vector":[...],"payload":{"law_id":...,"revision_id":...,"article":...,"text":...}}]}`をまとめて送ります。payloadにはChunkのキーをそのまま入れます。接続先とAPIキーは環境変数から読みます。
 
 ## 通知
 
