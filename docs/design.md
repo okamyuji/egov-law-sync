@@ -149,9 +149,9 @@ Actionsのワークフローは`okamyuji/reusable-workflows@v1`のGo CIとsecuri
 
 ### manifest/runs/
 
-`runs/daily/`、`runs/weekly/`、`runs/bootstrap/`に`YYYYMMDDTHHMMSSZ.json`を置きます。ファイル名は実行時刻（UTC）です。各ファイルは実行日（JST、date_jst）、秒数、HTTPステータス、異常と警告の内容を持ちます。bootstrapと日次のファイルは/lawsの1ページ目のtotal_countも持ちます。日次のファイルはさらに、対象日の範囲（from、to）、適用したかどうか（applied）、4分類の件数、想定内以外の件数、変更の一覧（law_id、種類、旧revision_id、新revision_id）、本文取得の成功と失敗の件数、バイト数、/law_revisionsの取得に失敗した法令ID（pending_law_ids）を持ちます。対象範囲が空の実行では、fromとtoに前回のtoをそのまま書きます。
+`runs/daily/`、`runs/weekly/`、`runs/bootstrap/`に`YYYYMMDDTHHMMSSZ.json`を置きます。ファイル名は実行時刻（UTC）です。各ファイルは実行日（JST、date_jst）、秒数、異常と警告の内容を持ちます。bootstrapと日次のファイルは/lawsの1ページ目のtotal_countも持ちます。日次のファイルはさらに、対象日の範囲（from、to）、適用したかどうか（applied）、4分類の件数、想定内以外の件数、変更の一覧（law_id、種類、旧revision_id、新revision_id）、本文取得の成功と失敗の件数、バイト数、/law_revisionsの取得に失敗した法令ID（pending_law_ids）を持ちます。対象範囲が空の実行では、fromとtoに前回のtoをそのまま書きます。
 
-次回の対象日の開始は、mainにある日次ファイルのうちappliedがtrueのもののtoの最大値の翌日です。日次ファイルが1つも無い場合は、runs/bootstrap/の最新ファイルのdate_jstです。どちらも無い場合は、bootstrapが未実行として終了コード1で終わります。過去日を手動で再処理してもtoの最大値は下がりません。総件数の判定は、appliedがtrueの最新の日次ファイル、それが無ければ最新のbootstrapファイルのtotal_countと比較します。
+次回の対象日の開始は、mainにある日次ファイルのうちappliedがtrueのもののtoの最大値の翌日です。pending_law_idsの引き継ぎ元は、直近の日次ファイルとbootstrapファイルのうち実行時刻が新しい方です。日次ファイルが1つも無い場合は、runs/bootstrap/の最新ファイルのdate_jstです。どちらも無い場合は、bootstrapが未実行として終了コード1で終わります。過去日を手動で再処理してもtoの最大値は下がりません。総件数の判定は、appliedがtrueの最新の日次ファイル、それが無ければ最新のbootstrapファイルのtotal_countと比較します。
 
 ### GitHub Release
 
