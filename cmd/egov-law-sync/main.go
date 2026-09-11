@@ -1,0 +1,110 @@
+// Package main egov-law-syncのエントリポイント。引数解釈、Depsの組み立て、終了コードの決定を担う
+package main
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"os"
+	"strconv"
+
+	"github.com/okamyuji/egov-law-sync/internal/application"
+	"github.com/okamyuji/egov-law-sync/internal/domain/sync"
+	"github.com/okamyuji/egov-law-sync/internal/infrastructure/clock"
+	"github.com/okamyuji/egov-law-sync/internal/infrastructure/csv"
+	"github.com/okamyuji/egov-law-sync/internal/infrastructure/egov"
+	"github.com/okamyuji/egov-law-sync/internal/infrastructure/zip"
+)
+
+const usage = `Usage: egov-law-sync <bootstrap|daily|weekly> [flags]
+
+Subcommands:
+  bootstrap   初回構築。laws.csv、revisions.csv、xml_index.csvを作る
+  daily       日次同期。前回適用済みの翌日からJST前日までを対象にする
+  weekly      週次のzip照合。laws.csvとxml_index.csvは変えず、破損だけ直す
+
+Flags (bootstrap, daily, weekly共通):
+  --release-tag string   GitHub Releaseのタグ。空なら本文取得をしない
+  --xml-dir string       XMLの保存先ディレクトリ（既定値 bin/xml）
+  --zip-path string      リリース用zipの出力先（既定値 bin/laws-xml.zip）
+
+Flags (dailyのみ):
+  --from string   対象範囲の開始日 YYYY-MM-DD。空なら自動で決める
+  --to string     対象範囲の終了日 YYYY-MM-DD。空ならJST前日
+  --force         異常判定を無視して適用する
+`
+
+func main() {
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+// run 引数を解釈し、Depsを組み立て、ユースケースを実行して終了コードを返す
+func run(args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		fmt.Fprint(stderr, usage)
+		return 2
+	}
+	if args[0] == "-h" || args[0] == "--help" {
+		fmt.Fprint(stdout, usage)
+		return 0
+	}
+	deps, err := buildDeps()
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	ctx := context.Background()
+	switch args[0] {
+	case "bootstrap":
+		return execute(ctx, args[1:], stdout, stderr, parseBootstrap, application.NewBootstrapper(deps).Run)
+	case "daily":
+		return execute(ctx, args[1:], stdout, stderr, parseDaily, application.NewDailySyncer(deps).Run)
+	case "weekly":
+		return execute(ctx, args[1:], stdout, stderr, parseWeekly, application.NewWeeklyChecker(deps).Run)
+	default:
+		fmt.Fprintf(stderr, "unknown subcommand: %s\n%s", args[0], usage)
+		return 2
+	}
+}
+
+// env 環境変数が空なら既定値を使う
+func env(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+// atoiEnv 環境変数が空か数値でなければ既定値を使う
+func atoiEnv(key string, def int) int {
+	v := os.Getenv(key)
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return def
+	}
+	return n
+}
+
+// buildDeps manifestの保存先を作ってからDepsを組み立てる
+func buildDeps() (application.Deps, error) {
+	manifestDir := env("EGOV_MANIFEST_DIR", "manifest")
+	if err := os.MkdirAll(manifestDir, 0o755); err != nil {
+		return application.Deps{}, err
+	}
+	c := egov.New(
+		env("EGOV_V2_BASE", "https://laws.e-gov.go.jp/api/2"),
+		env("EGOV_V1_BASE", "https://elaws.e-gov.go.jp/api/1"),
+		env("EGOV_BULK_BASE", "https://laws.e-gov.go.jp"),
+	)
+	return application.Deps{
+		Catalog: c, Revisions: c, XML: c, Updates: c, Daily: c, Bulk: c,
+		Repo:        csv.New(manifestDir),
+		Bundler:     zip.Bundler{},
+		Clock:       clock.System{},
+		Threshold:   sync.DefaultThresholds(),
+		Concurrency: atoiEnv("EGOV_CONCURRENCY", 1),
+	}, nil
+}

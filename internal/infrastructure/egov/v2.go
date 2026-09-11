@@ -126,6 +126,9 @@ func (c *Client) FetchXML(ctx context.Context, id law.RevisionID, dir string) (s
 	}
 	defer cancel()
 	defer resp.Body.Close()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", 0, err
+	}
 	f, err := os.Create(filepath.Join(dir, string(id)+".xml"))
 	if err != nil {
 		return "", 0, err
