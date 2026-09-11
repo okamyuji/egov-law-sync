@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -78,7 +79,7 @@ func TestFetchErrorsLogFirstTenThenSummary(t *testing.T) {
 	if _, err := NewBootstrapper(f.deps()).Run(context.Background(), BootstrapOptions{ReleaseTag: "t", XMLDir: t.TempDir()}); err != nil {
 		t.Fatal(err)
 	}
-	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	lines := errorLines(buf.String())
 	if len(lines) != 11 {
 		t.Fatalf("want 10 error lines and 1 summary, got %d: %q", len(lines), buf.String())
 	}
@@ -94,7 +95,20 @@ func TestFetchErrorsUnderTenHaveNoSummary(t *testing.T) {
 	if _, err := NewBootstrapper(f.deps()).Run(context.Background(), BootstrapOptions{ReleaseTag: "t", XMLDir: t.TempDir()}); err != nil {
 		t.Fatal(err)
 	}
-	if n := strings.Count(buf.String(), "\n"); n != 1 || strings.Contains(buf.String(), "more") {
+	if lines := errorLines(buf.String()); len(lines) != 1 || strings.Contains(buf.String(), "more") {
 		t.Fatalf("log=%q", buf.String())
 	}
 }
+
+// errorLines 進捗行（xml 12/12など）を除いた取得失敗の行
+func errorLines(log string) []string {
+	var out []string
+	for line := range strings.SplitSeq(strings.TrimSpace(log), "\n") {
+		if !progressLine.MatchString(line) {
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
+var progressLine = regexp.MustCompile(`^(xml|text) [0-9]+/[0-9]+$`)

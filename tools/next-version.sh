@@ -9,8 +9,8 @@ if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+$'; then
   exit 1
 fi
 
-# checkoutはタグを持たないので、Releaseの一覧から取る
-tags=$(gh release list --limit 1000 --json tagName --jq '.[].tagName')
+# checkoutはタグを持たないので、Releaseの一覧から取る。件数上限を作らないためページを最後まで辿る
+tags=$(gh api --paginate 'repos/{owner}/{repo}/releases' --jq '.[].tag_name')
 # 同じMAJOR.MINORのPATCH最大値。無ければ0。max+1は構成上、既存タグと重複しない
 escaped=${version//./\\.}
 max=$(printf '%s\n' "$tags" | sed -nE "s/^v$escaped\.([0-9]+)$/\1/p" | sort -n | tail -1)

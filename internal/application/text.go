@@ -37,9 +37,9 @@ func renderTexts(d Deps, targets []law.Law, fetched []law.XMLRecord, xmlDir, tex
 		tr, err := d.Text.Render(xmlDir, textDir, t)
 		if err != nil {
 			rec.Counts["text_failed"]++
-			continue
+		} else {
+			rendered = append(rendered, tr)
 		}
-		rendered = append(rendered, tr)
 		progress("text", done, len(fetched))
 	}
 	rec.Counts["text_ok"] += len(rendered)

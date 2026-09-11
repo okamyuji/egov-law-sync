@@ -29,6 +29,7 @@
         </Paragraph>
         <Paragraph Num="2">
           <ParagraphNum/>
+          <ParagraphCaption>（項見出し）</ParagraphCaption>
           <ParagraphSentence><Sentence>第二項の本文である。</Sentence></ParagraphSentence>
         </Paragraph>
       </Article>

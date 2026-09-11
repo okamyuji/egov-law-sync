@@ -109,21 +109,27 @@ func (c *converter) article(a *node) {
 
 // looseParagraph 条に属さない項（短い法令や附則）。1項を1Chunkにする
 func (c *converter) looseParagraph(p *node) {
-	lines := c.paragraph(p)
+	lines := c.paragraph(p, false)
 	c.addChunk("", stripParens(p.child("ParagraphCaption").text()), lines)
 }
 
 // paragraph 1項をMarkdownに書き、Chunk用の行を返す
-func (c *converter) paragraph(p *node) []string {
+func (c *converter) paragraph(p *node, withCaption bool) []string {
+	var lines []string
 	if caption := p.child("ParagraphCaption").text(); caption != "" {
 		c.line(caption)
+		// 条の中の項見出しはChunkに置き場が無いので本文に含める。条に属さない項はarticle_titleに入るので重ねない
+		if withCaption {
+			lines = append(lines, caption)
+		}
 	}
 	body := sentences(p.child("ParagraphSentence"))
 	if num := paragraphNum(p); num != "" {
 		body = num + "　" + body
 	}
 	c.line(body)
-	return append([]string{body}, c.blocks(p, 0)...)
+	lines = append(lines, body)
+	return append(lines, c.blocks(p, 0)...)
 }
 
 // paragraphNum 項番号。ParagraphNumが空でもNum属性が2以上なら全角数字で補う。e-GovのOldNum項はParagraphNumを空にする
@@ -157,7 +163,7 @@ func (c *converter) blocks(n *node, depth int) []string {
 			lines = append(lines, c.item(e, depth)...)
 		case e.name == "Paragraph":
 			inList = false
-			lines = append(lines, c.paragraph(e)...)
+			lines = append(lines, c.paragraph(e, true)...)
 		case e.name == "TableStruct":
 			inList = false
 			lines = append(lines, c.table(e)...)

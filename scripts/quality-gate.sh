@@ -10,6 +10,7 @@ need() {
 need staticcheck "go install honnef.co/go/tools/cmd/staticcheck@latest"
 need golangci-lint "brew install golangci-lint"
 need govulncheck "go install golang.org/x/vuln/cmd/govulncheck@latest"
+need gitleaks "brew install gitleaks"
 
 echo "==> gofmt"
 test -z "$(gofmt -l .)" || { gofmt -l .; echo "gofmt: 上のファイルを整形してください" >&2; exit 1; }
@@ -36,9 +37,5 @@ make mutate
 echo "==> e2e"
 make e2e
 echo "==> gitleaks"
-if command -v gitleaks >/dev/null 2>&1; then
-  gitleaks detect --no-git --source . --redact --no-banner
-else
-  echo "  (gitleaks not installed; CI runs the secret scan)"
-fi
+gitleaks detect --no-git --source . --redact --no-banner
 echo "all quality checks passed"

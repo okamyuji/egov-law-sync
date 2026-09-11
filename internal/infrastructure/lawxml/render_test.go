@@ -204,6 +204,9 @@ func TestINV7FallbackKeepsEverySentence(t *testing.T) {
 			t.Fatalf("chunk text must carry %q: %q", want, chunks[0].Text)
 		}
 	}
+	if !strings.Contains(chunks[0].Text, "（項見出し）\n２　第二項の本文である。") {
+		t.Fatalf("nested paragraph caption must reach the chunk text: %q", chunks[0].Text)
+	}
 	for _, want := range []string{"\n## 制定文\n", "内閣は、この政令を制定する。", "\n## （附図）\n", "記章ノ制式｜径三糎", "記章ハ左胸ニ佩用ス", "- 一　径ハ三糎トス"} {
 		if !strings.Contains(string(md), want) {
 			t.Fatalf("appendix content %q must reach the markdown:\n%s", want, md)

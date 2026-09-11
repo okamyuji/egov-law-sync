@@ -93,6 +93,14 @@ func TestEachRoundTripsRenderedChunks(t *testing.T) {
 	}
 }
 
+func TestEachRejectsRegularFile(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "A.jsonl"), "{}\n")
+	if err := (JSONL{}).Each(filepath.Join(dir, "A.jsonl"), func(law.Chunk) error { return nil }); err == nil {
+		t.Fatal("a regular file must be an error")
+	}
+}
+
 func TestEachRejectsMissingDir(t *testing.T) {
 	err := JSONL{}.Each(filepath.Join(t.TempDir(), "missing"), func(law.Chunk) error { return nil })
 	if err == nil {

@@ -22,8 +22,12 @@ const maxLineBytes = 16 << 20
 // Each *.jsonlをファイル名順に開き、1行ずつfnへ渡す。壊れた行かfnのerrorでその場で止まる
 func (JSONL) Each(dir string, fn func(law.Chunk) error) error {
 	// 存在しないディレクトリは0件ではなく誤りとして返す。打ち間違いを無言で成功させないため
-	if _, err := os.Stat(dir); err != nil {
+	fi, err := os.Stat(dir)
+	if err != nil {
 		return err
+	}
+	if !fi.IsDir() {
+		return fmt.Errorf("%s is not a directory", dir)
 	}
 	paths, err := filepath.Glob(filepath.Join(dir, "*.jsonl"))
 	if err != nil {

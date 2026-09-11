@@ -149,11 +149,11 @@ func applyXML(ctx context.Context, d Deps, targets []law.Law, dir, tag string, i
 			rec.Counts["xml_failed"]++
 			// 記録側に排他を持たせていないので、取得のgoroutineからではなくこの直列ループで記録する
 			lg.add("xml", string(o.id), o.err)
-			continue
+		} else {
+			fetched = append(fetched, o.rec)
+			index[o.rec.RevisionID] = o.rec
+			rec.Bytes += o.rec.Bytes
 		}
-		fetched = append(fetched, o.rec)
-		index[o.rec.RevisionID] = o.rec
-		rec.Bytes += o.rec.Bytes
 		progress("xml", len(fetched)+rec.Counts["xml_failed"], len(targets))
 	}
 	rec.Counts["xml_ok"] += len(fetched)

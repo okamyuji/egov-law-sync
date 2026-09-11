@@ -11,6 +11,8 @@ fail=0
 cat > "$tmp/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 if [ "${GH_STUB_FAIL:-}" = "1" ]; then echo "gh: boom" >&2; exit 1; fi
+# ページを最後まで辿る呼び方だけを受け付ける（--limitによる打ち切りを防ぐ）
+case "$*" in *api*--paginate*) ;; *) echo "gh stub: expected 'gh api --paginate', got: $*" >&2; exit 1 ;; esac
 printf '%s\n' "${GH_STUB_TAGS:-}" | sed '/^$/d'
 EOF
 chmod +x "$tmp/bin/gh"
