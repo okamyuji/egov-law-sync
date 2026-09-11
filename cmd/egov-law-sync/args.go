@@ -105,6 +105,17 @@ func parseDaily(args []string) (application.DailyOptions, error) {
 	return o, nil
 }
 
+func parseIngest(args []string) (application.IngestOptions, error) {
+	fs := newFlagSet("ingest")
+	if err := fs.Parse(args); err != nil {
+		return application.IngestOptions{}, err
+	}
+	if fs.NArg() != 1 {
+		return application.IngestOptions{}, errors.New("ingest needs exactly one argument: <text-dir>")
+	}
+	return application.IngestOptions{TextDir: fs.Arg(0)}, nil
+}
+
 // parseOptionalDate 空文字は未指定として扱い、ゼロ値のlaw.Dateを返す
 func parseOptionalDate(s string) (law.Date, error) {
 	if s == "" {

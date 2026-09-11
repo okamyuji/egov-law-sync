@@ -40,6 +40,16 @@ func TestParseWeeklyFlags(t *testing.T) {
 	}
 }
 
+func TestParseIngest(t *testing.T) {
+	o, err := parseIngest([]string{"out/text"})
+	if err != nil || o.TextDir != "out/text" {
+		t.Fatalf("o=%+v err=%v", o, err)
+	}
+	if _, err := parseIngest(nil); err == nil {
+		t.Fatal("missing dir must fail")
+	}
+}
+
 func TestRunUnknownSubcommand(t *testing.T) {
 	var stdout, stderr strings.Builder
 	if code := run([]string{"nope"}, &stdout, &stderr); code != 2 {

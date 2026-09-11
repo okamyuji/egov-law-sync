@@ -257,6 +257,33 @@ func deref(r *RunRecord) (RunRecord, bool, error) {
 	return *r, true, nil
 }
 
+type fakeSource struct {
+	chunks []law.Chunk
+	broken int // この件数を渡した後にエラーを返す。0なら返さない
+}
+
+func (f *fakeSource) Each(_ string, fn func(law.Chunk) error) error {
+	for i, c := range f.chunks {
+		if f.broken > 0 && i == f.broken {
+			return errors.New("broken line")
+		}
+		if err := fn(c); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type fakeSink struct {
+	batches [][]law.Chunk
+	err     error
+}
+
+func (f *fakeSink) Put(_ context.Context, chunks []law.Chunk) error {
+	f.batches = append(f.batches, slices.Clone(chunks))
+	return f.err
+}
+
 type fakeClock struct {
 	now time.Time
 }

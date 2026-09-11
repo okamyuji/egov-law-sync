@@ -22,6 +22,8 @@ type Deps struct {
 	Repo        ManifestRepository
 	Bundler     ReleaseBundler
 	Text        TextRenderer
+	Source      ChunkSource
+	Sink        ChunkSink
 	Clock       Clock
 	Threshold   sync.Thresholds
 	Concurrency int

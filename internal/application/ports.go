@@ -87,6 +87,11 @@ type ChunkSource interface {
 	Each(dir string, fn func(law.Chunk) error) error
 }
 
+// ChunkSink 条単位のチャンクをvectorDBなどへ登録する口。既定はnoop。embeddingの計算は実装側の責務
+type ChunkSink interface {
+	Put(ctx context.Context, chunks []law.Chunk) error
+}
+
 // ReleaseBundler Release添付のzipを作る。Bundleは<rev>.xml、BundleTextは<rev>.mdと<rev>.jsonl。どちらもindex.csvを含む
 type ReleaseBundler interface {
 	Bundle(xmlDir, outPath string, index []law.XMLRecord) error
