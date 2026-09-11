@@ -16,7 +16,7 @@ space_check() { # file mode(md|go)
       if /[\p{Han}\p{Hiragana}\p{Katakana}、。（）]\s+[A-Za-z0-9]/ || /[A-Za-z0-9%]\s+[\p{Han}\p{Hiragana}\p{Katakana}、。（）]/;
   ' "$2" "$1"
 }
-md_files=$(find "$target" -name '*.md' -not -path '*/_quality/*' -not -path '*/superpowers/*' -not -path '*/.git/*')
+md_files=$(find "$target" -name '*.md' -not -path '*/_quality/*' -not -path '*/superpowers/*' -not -path '*/.superpowers/*' -not -path '*/.git/*')
 for f in $md_files; do
   grep -nE 'TBD|TODO|未定|後で決める' "$f" | sed "s|^\([0-9]*\):.*|[Critical] $f:\1 未決定の印があります|" >> "$out"
   space_check "$f" md >> "$out"
@@ -30,8 +30,9 @@ done
 go_files=$(find "$target" -name '*.go' -not -path '*/.git/*')
 for f in $go_files; do
   space_check "$f" go >> "$out"
-  # ドキュメントコメントは「名前 説明」。「名前 は 説明」の形は不可
+  # ドキュメントコメントは「名前 説明」。「名前 は 説明」と「名前説明」（空白欠落）は不可
   perl -CSD -Mutf8 -ne 'print "[High] $ARGV:$. ドキュメントコメントに「名前 は」の形があります\n" if m{^\s*//\s*[A-Za-z_][A-Za-z0-9_]*\s+は}' "$f" >> "$out"
+  perl -CSD -Mutf8 -ne 'print "[High] $ARGV:$. ドキュメントコメントの名前と説明の間に空白がありません\n" if m{^\s*//\s*[A-Za-z_][A-Za-z0-9_]*[\p{Han}\p{Hiragana}\p{Katakana}]}' "$f" >> "$out"
 done
 cat "$out"
 crit=$(grep -c '^\[Critical\]' "$out"); high=$(grep -c '^\[High\]' "$out"); med=$(grep -c '^\[Medium\]' "$out"); low=$(grep -c '^\[Low\]' "$out")

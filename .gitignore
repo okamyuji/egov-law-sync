@@ -4,3 +4,4 @@ docs/_quality/
 docs/superpowers/
 *.tmp
 .DS_Store
+.superpowers/
