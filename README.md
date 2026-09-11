@@ -252,13 +252,14 @@ Qdrantの例では、`PUT /collections/laws/points`に`{"points":[{"id":"<revisi
 
 ### 通達・通知の公開場所の例
 
-| 所管 | 公開場所 | 主な内容 |
+| 所管 | 公開場所 | ページ名 |
 |---|---|---|
-| 国税庁 | `https://www.nta.go.jp/law/tsutatsu/` | 法令解釈通達、質疑応答事例 |
-| 厚生労働省 | `https://www.mhlw.go.jp/hourei/` | 法令等データベースの通知検索 |
-| 金融庁 | `https://www.fsa.go.jp/common/law/` | 監督指針、事務ガイドライン |
-| 公正取引委員会 | `https://www.jftc.go.jp/dk/guideline/` | 独占禁止法などのガイドライン |
-| 特許庁 | `https://www.jpo.go.jp/system/laws/rule/guideline/` | 審査基準 |
+| 国税庁 | `https://www.nta.go.jp/law/tsutatsu/menu.htm` | 法令解釈通達 |
+| 国税庁 | `https://www.nta.go.jp/law/shitsugi/01.htm` | 質疑応答事例 |
+| 厚生労働省 | `https://www.mhlw.go.jp/hourei/` | 法令等データベースサービス（通知の検索） |
+| 金融庁 | `https://www.fsa.go.jp/common/law/` | 法令・指針等（監督指針、事務ガイドライン） |
+| 公正取引委員会 | `https://www.jftc.go.jp/dk/guideline/` | 法令・ガイドライン等（独占禁止法） |
+| 特許庁 | `https://www.jpo.go.jp/system/laws/rule/guideline/` | 基準・便覧・ガイドライン（審査基準） |
 
 他の省庁も、法令の所管ページや行政手続法に基づく審査基準・処分基準の公開ページに同種の文書があります。省庁ごとに一覧ページのURLと本文ページの構造が違うので、所管ごとに「一覧URL、一覧から本文URLを取る規則、本文の分割規則」を設定ファイル（例: `circulars.yaml`）に持たせ、パイプラインは共通にします。
 
@@ -282,3 +283,7 @@ Qdrantの例では、`PUT /collections/laws/points`に`{"points":[{"id":"<revisi
 - v1 APIの終了日は未公表です。更新の無い日の判定はv1の404に依存しています。
 - 安全な並列度は未計測です。
 - 施行日到来時に`/laws`の現行revisionが自動で切り替わるかは未確認です。
+
+## ライセンス
+
+MITライセンスです。全文は[LICENSE](LICENSE)にあります。
