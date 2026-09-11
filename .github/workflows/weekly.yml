@@ -50,6 +50,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if [ "${{ steps.run.outputs.code }}" = "3" ]; then git add manifest/runs; else git add manifest; fi
           git commit -m "chore(sync): weekly $(date -u +%F) (exit ${{ steps.run.outputs.code }})" || exit 0
+          # 実行中にmainへ別のcommitが入っても失敗しないよう、manifestの変更を最新のmainに載せ直す
+          git pull --rebase origin main
           git push
       - name: issue
         if: ${{ !cancelled() && steps.labels.outcome == 'success' }}
