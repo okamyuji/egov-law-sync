@@ -1,0 +1,6 @@
+# 中間成果物はgit管理しない
+bin/
+docs/_quality/
+docs/superpowers/
+*.tmp
+.DS_Store
