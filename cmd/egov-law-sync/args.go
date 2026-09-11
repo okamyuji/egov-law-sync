@@ -11,9 +11,14 @@ import (
 	"github.com/okamyuji/egov-law-sync/internal/domain/law"
 )
 
-// execute 引数を解釈してユースケースを実行し、終了コードを返す。parse失敗は2、実行エラーは1
-func execute[T any](ctx context.Context, args []string, stdout, stderr io.Writer,
-	parse func([]string) (T, error), run func(context.Context, T) (application.Result, error)) int {
+// useCase Optionsを受けて実行できるユースケース
+type useCase[T any] interface {
+	Run(context.Context, T) (application.Result, error)
+}
+
+// execute 引数を解釈し、parse成功後にDepsを組み立ててユースケースを実行する。--helpや引数誤りでmanifestディレクトリを作らないための順序。parse失敗は2、実行エラーは1
+func execute[T any, U useCase[T]](ctx context.Context, args []string, stdout, stderr io.Writer,
+	parse func([]string) (T, error), newUseCase func(application.Deps) U) int {
 	o, err := parse(args)
 	if errors.Is(err, flag.ErrHelp) {
 		fmt.Fprint(stdout, usage)
@@ -23,7 +28,12 @@ func execute[T any](ctx context.Context, args []string, stdout, stderr io.Writer
 		fmt.Fprintf(stderr, "%v\n%s", err, usage)
 		return 2
 	}
-	res, err := run(ctx, o)
+	deps, err := buildDeps()
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	res, err := newUseCase(deps).Run(ctx, o)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1

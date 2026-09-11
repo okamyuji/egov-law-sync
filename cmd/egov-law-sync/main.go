@@ -48,19 +48,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprint(stdout, usage)
 		return 0
 	}
-	deps, err := buildDeps()
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
 	ctx := context.Background()
 	switch args[0] {
 	case "bootstrap":
-		return execute(ctx, args[1:], stdout, stderr, parseBootstrap, application.NewBootstrapper(deps).Run)
+		return execute(ctx, args[1:], stdout, stderr, parseBootstrap, application.NewBootstrapper)
 	case "daily":
-		return execute(ctx, args[1:], stdout, stderr, parseDaily, application.NewDailySyncer(deps).Run)
+		return execute(ctx, args[1:], stdout, stderr, parseDaily, application.NewDailySyncer)
 	case "weekly":
-		return execute(ctx, args[1:], stdout, stderr, parseWeekly, application.NewWeeklyChecker(deps).Run)
+		return execute(ctx, args[1:], stdout, stderr, parseWeekly, application.NewWeeklyChecker)
 	default:
 		fmt.Fprintf(stderr, "unknown subcommand: %s\n%s", args[0], usage)
 		return 2
