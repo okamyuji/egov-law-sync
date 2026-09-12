@@ -222,19 +222,20 @@ Markdownは、先頭にYAML front matter（law_id、revision_id、law_title、la
 - 環境変数は次の5つです。`EGOV_V2_BASE`（既定値`https://laws.e-gov.go.jp/api/2`）、`EGOV_V1_BASE`（既定値`https://elaws.e-gov.go.jp/api/1`）、`EGOV_BULK_BASE`（既定値`https://laws.e-gov.go.jp`）、`EGOV_CONCURRENCY`（本文取得の並列度、既定値1）、`EGOV_MANIFEST_DIR`（正本の置き場所、既定値`manifest`）です。
 - ワークフローの手順は「CLI実行、Releaseの作成と添付、commit、push」の順です。Releaseの作成に失敗すればcommitせずにジョブを失敗させ、次回の実行が本文を取り直します。pushが競合で失敗した場合もジョブを失敗させ、次回の実行が同じ範囲を再処理します。CLIが0で終わった後にジョブが失敗した場合も、Issueの手順はキャンセル以外で常に実行され、ジョブの状態を見てラベル`anomaly`のIssueを作ります。Releaseだけが残っても正本は参照しないので害はありません。
 - ワークフローは終了コードを変数に取ります。3のときはruns/だけをcommitしてラベル`anomaly`のIssueを作ります。0でも3でもないときは、ラベル`anomaly`のIssueだけを作ります。0で警告があるときは、commitのあとにラベル`warning`のIssueを作ります。2つのラベルは、ワークフローの先頭で`gh label create --force`により毎回作ります（既にあれば何もしません）。同じラベルのIssueが開いていれば、新しいIssueは作らずそのIssueにコメントを追加するので、異常と警告は互いに埋もれません。
-- 手動起動（workflow_dispatch）では`--from`、`--to`、`--force`を渡せます。`--force`は「想定内以外の変更件数」と「総件数の減少」の判定を無視して適用します。一覧の取得失敗と件数の不一致は`--force`があっても異常のままです。
+- 手動起動（workflow_dispatch）では`--from`、`--to`、`--force`を渡せます。`--force`は「想定内以外の変更件数」と「総件数の減少」の判定を無視して適用します。bootstrapも`--force`を受け取り、既存laws.csvからの減少判定だけを無視します。一覧の取得失敗と件数の不一致は`--force`があっても異常のままです。
 
 ### bootstrap（初回。再実行可能）
 
 1. /lawsを全件取得し、収集件数を1ページ目のtotal_countと照合します。不一致なら、runs/bootstrap/だけを書いて終了コード3です。
-2. /laws?asof=2099-12-31を全件取得し、現在とrevision_idが異なる法令（実測で842件）を未施行改正を持つ法令とみなします。それらの法令の/law_revisionsを取得します。取得に失敗した法令IDはpending_law_idsとしてruns/に書き、次の日次が引き直します。404の法令は引き直しません。
-3. 既存のrevisions.csvがあれば読み込み、手順2の結果をrevision_idで置き換えながらマージします。first_seenは既存行の値を保持し、新規行は実行日です。
-4. 手順1で取得した一覧の全行について、law_file XMLを逐次取得します。既存のxml_index.csvがあれば読み込み、取得した行をrevision_idで置き換えながらマージします（過去のrevisionの行とrelease_tagは残ります）。release_tagには`bootstrap.yml`が渡す`--release-tag`の値を書きます。`--release-tag`が空なら本文取得を飛ばし、xml_index.csvを変えません。実走では9568件を44分で取得しました（並列度1）。失敗した行はxml_index.csvに書かず、件数をruns/に記録します。失敗が20件を超えたら警告です。
-5. 取得できたrevisionをTextRendererでMarkdownとJSONLに変換し、`--text-dir`へ書きます。失敗は`text_failed`に数え、20件を超えたら警告です。
-6. laws.csv、revisions.csv、xml_index.csv、runs/bootstrap/を一時ファイルへ書き、renameで置き換えます。runs/bootstrap/にはtotal_countを含めます。取得したXMLが1件以上あれば、ReleaseBundlerで`bin/laws-xml.zip`を作ります。変換できたrevisionが1件以上あれば`bin/laws-text.zip`を作ります。
-7. ワークフローが次のバージョンタグのReleaseに2つのzipを添付し、正本をcommitしてpushします。
+2. 既存のlaws.csvがあれば、それと比較して消失（/lawsに無い）の法令をruns/のcountsのremovedとchangesに載せます。1ページ目のtotal_countが既存laws.csvの行数より1%超少ない場合は異常です。異常のときは未施行改正と本文の取得に入らず、runs/bootstrap/だけを書いて終了コード3で終わります。`--force`はこの判定だけを無視します。laws.csvが無いか空なら判定しません。
+3. /laws?asof=2099-12-31を全件取得し、現在とrevision_idが異なる法令（実測で842件）を未施行改正を持つ法令とみなします。それらの法令の/law_revisionsを取得します。取得に失敗した法令IDはpending_law_idsとしてruns/に書き、次の日次が引き直します。404の法令は引き直しません。
+4. 既存のrevisions.csvがあれば読み込み、手順3の結果をrevision_idで置き換えながらマージします。first_seenは既存行の値を保持し、新規行は実行日です。
+5. 手順1で取得した一覧の全行について、law_file XMLを逐次取得します。既存のxml_index.csvがあれば読み込み、取得した行をrevision_idで置き換えながらマージします（過去のrevisionの行とrelease_tagは残ります）。release_tagには`bootstrap.yml`が渡す`--release-tag`の値を書きます。`--release-tag`が空なら本文取得を飛ばし、xml_index.csvを変えません。実走では9568件を44分で取得しました（並列度1）。失敗した行はxml_index.csvに書かず、件数をruns/に記録します。失敗が20件を超えたら警告です。
+6. 取得できたrevisionをTextRendererでMarkdownとJSONLに変換し、`--text-dir`へ書きます。失敗は`text_failed`に数え、20件を超えたら警告です。
+7. laws.csv、revisions.csv、xml_index.csv、runs/bootstrap/を一時ファイルへ書き、renameで置き換えます。runs/bootstrap/にはtotal_countを含めます。取得したXMLが1件以上あれば、ReleaseBundlerで`bin/laws-xml.zip`を作ります。変換できたrevisionが1件以上あれば`bin/laws-text.zip`を作ります。
+8. ワークフローが次のバージョンタグのReleaseに2つのzipを添付し、正本をcommitしてpushします。
 
-bootstrapは`bootstrap.yml`を手動起動して実行します。再実行すると本文は全件取り直しになりますが、xml_index.csvとrevisions.csvはどちらもマージなので過去の行は残ります。HTTPの失敗が3回再試行後も続く場合は終了コード1で終わり、何も書きません。
+bootstrapは`bootstrap.yml`を手動起動して実行します。再実行すると本文は全件取り直しになりますが、xml_index.csvとrevisions.csvはどちらもマージなので過去の行は残ります。laws.csvは一覧で置き換えるので、手順2の減少判定が上書きを止めます。人が内容を確認して適用する場合は、`bootstrap.yml`の`force`入力を`true`にして起動します。HTTPの失敗が3回再試行後も続く場合は終了コード1で終わり、何も書きません。
 
 ### daily（毎日07:00 JST）
 
@@ -289,7 +290,7 @@ ActionsのcronはUTCで書きます。
 | 種類 | 判定 | 閾値 | 根拠 |
 |---|---|---|---|
 | 異常 | 想定内以外の変更件数が多すぎる | 200件超（固定） | 一覧のupdated差分の実測は09-10で22件、30日で373件（平均12件/日）でした。登録済みrevisionへの切替は想定内なので、一斉施行日にも登録済みの分は発火しません。16日を超える欠落からの復帰は再登録だけで200件を超えうるので（1日平均12.4件）、人が`--force`で適用します |
-| 異常 | 一覧の総件数が減った | 1ページ目のtotal_countが前回のappliedな実行より1%超少ない | 全件は9567件です。初回は前回が無いので判定しません |
+| 異常 | 一覧の総件数が減った | 日次では1ページ目のtotal_countが前回のappliedな実行より1%超少ない。bootstrapの再実行では既存laws.csvの行数より1%超少ない | 全件は9567件です。初回は前回が無いので判定しません。bootstrapはlaws.csvを一覧で置き換えるので、上書きされる行数を基準にします |
 | 異常 | 一覧が取得できない、または件数が合わない | 1ページでも3回再試行後に失敗、または収集件数が1ページ目のtotal_countと不一致 | 部分的な一覧で比較すると最大5000件が消失と誤判定されます |
 | 異常 | v1が取得できない | 404以外の失敗が3回再試行後も続く | 404は更新無しですが、それ以外は取りこぼしになります。2日分の重ね取りでは2日続く障害を吸収できません |
 | 警告 | v1に無い更新がsec3にある | v1が404の日にsec3が200でディレクトリが1つ以上 | 09-10の照合で両者は同じ集合でした。v1の終了や障害をこの警告で知ります |
@@ -321,7 +322,7 @@ Slack Incoming Webhookを使う場合の形は次のとおりです。
 | 種類 | 対象 | 方法 |
 |---|---|---|
 | 単体 | domain層の規則（差分の4分類、想定内の判定、異常と警告の境界値）、application層のユースケース（portをフェイクに差し替える）、infrastructure層の変換（v1 XMLの解析、/law_revisionsの変換、CSVの読み書き、zipの展開） | 純粋関数はテーブル駆動、ユースケースはportのフェイク、HTTPクライアントはhttptestで固定応答を返します |
-| E2E | 主要導線。bootstrapの後にdailyを2回（更新あり、更新なし）、weeklyを1回、異常（閾値超過）を1回 | `make build`で作ったバイナリを、httptestで立てた偽のAPIサーバとbulkdownloadに向けて実行し、CSVの内容と終了コードを検証します |
+| E2E | 主要導線。bootstrapの後にdailyを2回（更新あり、更新なし）、weeklyを1回、異常（閾値超過）を1回、消失を2回（1%未満で適用、1%超で異常と`--force`）、bootstrapの再実行で減少を1回 | `make build`で作ったバイナリを、httptestで立てた偽のAPIサーバとbulkdownloadに向けて実行し、CSVの内容と終了コードを検証します |
 | 統合 | 実APIへの取得 | `EGOV_LIVE=1`を設定したときだけ実行します |
 | 実走 | Actions上のbootstrapとdaily | bootstrapは再実行可能なので繰り返し検証できます。runs/の値で確認します |
 

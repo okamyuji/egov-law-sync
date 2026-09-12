@@ -34,10 +34,12 @@ Flags (bootstrap, daily, weekly共通):
   --text-dir string       MarkdownとJSONLの保存先ディレクトリ（既定値 bin/text）
   --text-zip-path string  MarkdownとJSONLのzipの出力先（既定値 bin/laws-text.zip）
 
+Flags (bootstrapとdaily):
+  --force         異常判定を無視して適用する。bootstrapでは既存laws.csvからの減少判定だけが対象
+
 Flags (dailyのみ):
   --from string   対象範囲の開始日 YYYY-MM-DD。空なら自動で決める
   --to string     対象範囲の終了日 YYYY-MM-DD。空ならJST前日
-  --force         異常判定を無視して適用する
 `
 
 func main() {

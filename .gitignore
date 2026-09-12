@@ -5,3 +5,4 @@ docs/superpowers/
 *.tmp
 .DS_Store
 .superpowers/
+.serena/
