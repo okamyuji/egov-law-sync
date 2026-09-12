@@ -561,22 +561,26 @@ func hasRow(rows [][]string, key string) bool {
 	return slices.ContainsFunc(rows, func(r []string) bool { return r[0] == key })
 }
 
-// manifestCSVs 3つのCSVの行。abort経路で「3つのCSVを変えない」を比較するために使う
-func manifestCSVs(t *testing.T, manifestDir string) map[string][][]string {
+// manifestCSVs 3つのCSVのバイト列。異常時は書き込み自体をしない契約なので、行の集合ではなくバイト列で比較する
+func manifestCSVs(t *testing.T, manifestDir string) map[string][]byte {
 	t.Helper()
-	out := map[string][][]string{}
+	out := map[string][]byte{}
 	for _, name := range []string{"laws.csv", "revisions.csv", "xml_index.csv"} {
-		out[name] = readRows(t, filepath.Join(manifestDir, name))
+		body, err := os.ReadFile(filepath.Join(manifestDir, name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		out[name] = body
 	}
 	return out
 }
 
-// assertManifestUnchanged beforeと今の3つのCSVが行の集合として等しいことを確かめる
-func assertManifestUnchanged(t *testing.T, manifestDir string, before map[string][][]string) {
+// assertManifestUnchanged beforeと今の3つのCSVがバイト列として等しいことを確かめる
+func assertManifestUnchanged(t *testing.T, manifestDir string, before map[string][]byte) {
 	t.Helper()
-	for name, rows := range manifestCSVs(t, manifestDir) {
-		if !rowsEqual(before[name], rows) {
-			t.Fatalf("%s must not change on anomaly: before=%v after=%v", name, before[name], rows)
+	for name, body := range manifestCSVs(t, manifestDir) {
+		if !bytes.Equal(before[name], body) {
+			t.Fatalf("%s must not change on anomaly", name)
 		}
 	}
 }
