@@ -180,7 +180,7 @@ Releaseのタグは`v0.0.1`のようなsemantic versionです。`MAJOR.MINOR`は
 
 ローカルで実行した場合、`--release-tag`が空なので本文XMLの取得は行われず、laws.csv、revisions.csv、runs/だけが書き換わります。ローカル実行の結果はcommitしないでください。runs/をcommitすると次回のActionsの対象日がずれます。commitとReleaseの作成はGitHub Actionsのワークフローが行います。
 
-GitHub Actionsでは`bootstrap.yml`を手動で1回起動し、その後は`daily.yml`が毎日07:00 JSTに、`weekly.yml`が毎週日曜08:00 JSTに動きます。正常時は3つのCSVを自動commitし、異常判定に該当した日はCSVを変えずにラベル`anomaly`のIssueを作ります。人が内容を確認したうえで適用する場合は、`daily.yml`を手動起動して`--force`を渡します。`bootstrap.yml`の再実行で既存のlaws.csvより一覧が1%超少ない場合も同じ扱いで、`force`入力を`true`にして起動すると適用します。CIは`okamyuji/reusable-workflows@v1`のGo CIとsecurity-scanに加えて、`VERSION`の形式検査、`make doclint`、`make quality`を実行します。
+GitHub Actionsでは`bootstrap.yml`を手動で1回起動し、その後は`daily.yml`が毎日07:07 JSTに、`weekly.yml`が毎週日曜08:07 JSTに動きます。正時を避けているのはActionsのscheduleの遅延を減らすためです。正常時は3つのCSVを自動commitし、異常判定に該当した日はCSVを変えずにラベル`anomaly`のIssueを作ります。人が内容を確認したうえで適用する場合は、`daily.yml`を手動起動して`--force`を渡します。`bootstrap.yml`の再実行で既存のlaws.csvより一覧が1%超少ない場合も同じ扱いで、`force`入力を`true`にして起動すると適用します。CIは`okamyuji/reusable-workflows@v1`のGo CIとsecurity-scanに加えて、`VERSION`の形式検査、`make doclint`、`make quality`を実行します。
 
 ### 開発時の検査
 
