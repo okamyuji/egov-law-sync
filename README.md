@@ -153,7 +153,7 @@ bin/egov-law-sync weekly                                            # sec1 zip�
 bin/egov-law-sync ingest bin/text                                   # MarkdownとJSONLの置き場からChunkSinkへ登録する（既定はno-op）
 ```
 
-共通のオプションは`--release-tag`、`--xml-dir`（既定値`bin/xml`）、`--zip-path`（既定値`bin/laws-xml.zip`）、`--text-dir`（既定値`bin/text`。空なら変換しない）、`--text-zip-path`（既定値`bin/laws-text.zip`）です。`daily`はさらに`--from`、`--to`、`--force`を受け取ります。
+共通のオプションは`--release-tag`、`--xml-dir`（既定値`bin/xml`）、`--zip-path`（既定値`bin/laws-xml.zip`）、`--text-dir`（既定値`bin/text`。空なら変換しない）、`--text-zip-path`（既定値`bin/laws-text.zip`）です。`daily`はさらに`--from`、`--to`、`--force`を受け取ります。`bootstrap`は`--force`を受け取り、既存のlaws.csvより一覧が1%超少ないときの異常判定を無視します。
 
 Releaseのタグは`v0.0.1`のようなsemantic versionです。`MAJOR.MINOR`はリポジトリ直下の`VERSION`が持ち、変えるときは`VERSION`を書き換えるPRを出します。`PATCH`は実行のたびに既存のReleaseから自動で採番します。各Releaseには`laws-xml.zip`（取得したXMLとindex.csv）と`laws-text.zip`（同じ法令の`<revision_id>.md`、`<revision_id>.jsonl`、index.csv）が付きます。Markdownは先頭にlaw_id、revision_id、施行日、出典URLのfront matterを持ち、条を`####`の見出しにした本文が続きます。JSONLは1行が1条で、法令ID、revision_id、法令名、施行日、位置、条番号、見出し、本文、出典URLを持ちます。
 
@@ -180,7 +180,7 @@ Releaseのタグは`v0.0.1`のようなsemantic versionです。`MAJOR.MINOR`は
 
 ローカルで実行した場合、`--release-tag`が空なので本文XMLの取得は行われず、laws.csv、revisions.csv、runs/だけが書き換わります。ローカル実行の結果はcommitしないでください。runs/をcommitすると次回のActionsの対象日がずれます。commitとReleaseの作成はGitHub Actionsのワークフローが行います。
 
-GitHub Actionsでは`bootstrap.yml`を手動で1回起動し、その後は`daily.yml`が毎日07:00 JSTに、`weekly.yml`が毎週日曜08:00 JSTに動きます。正常時は3つのCSVを自動commitし、異常判定に該当した日はCSVを変えずにラベル`anomaly`のIssueを作ります。人が内容を確認したうえで適用する場合は、`daily.yml`を手動起動して`--force`を渡します。CIは`okamyuji/reusable-workflows@v1`のGo CIとsecurity-scanに加えて、`VERSION`の形式検査、`make doclint`、`make quality`を実行します。
+GitHub Actionsでは`bootstrap.yml`を手動で1回起動し、その後は`daily.yml`が毎日07:00 JSTに、`weekly.yml`が毎週日曜08:00 JSTに動きます。正常時は3つのCSVを自動commitし、異常判定に該当した日はCSVを変えずにラベル`anomaly`のIssueを作ります。人が内容を確認したうえで適用する場合は、`daily.yml`を手動起動して`--force`を渡します。`bootstrap.yml`の再実行で既存のlaws.csvより一覧が1%超少ない場合も同じ扱いで、`force`入力を`true`にして起動すると適用します。CIは`okamyuji/reusable-workflows@v1`のGo CIとsecurity-scanに加えて、`VERSION`の形式検査、`make doclint`、`make quality`を実行します。
 
 ### 開発時の検査
 
@@ -266,11 +266,11 @@ Qdrantの例では、`PUT /collections/laws/points`に`{"points":[{"id":"<revisi
 
 ### 共通の流れ
 
-1. 取得。[webgrab](https://github.com/okamyuji/webgrab)のようなHTML本文抽出ツールで一覧ページを定期的に取得し、前回との差分で新着と改正を検知します。本文ページをMarkdownにし、出典URLと取得日をfront matterに残します。省庁サイトには機械可読な更新一覧が無いので、取得件数の急変で止める保護をこのアプリの異常判定と同じ考え方で持ちます。ページ構造の変更で壊れる前提で監視します。
-2. 分割。文書自身の項番号を単位にします（通達の「36-1」、監督指針の「II-1-2」、審査基準の章節など）。条文の条番号と一対一ではないので、条文とは別の規則です。
-3. 対応付け。本文中の「労働基準法第三十六条第一項」のような参照を正規表現で拾い、`laws.csv`の題名で`law_id`に、条番号を`article`の値に変換して候補にします。確定は人またはLLMが行います。
-4. 登録。`law.Chunk`と同じキーのJSONLにします。`path`に文書名、`article`に項番号、`law_id`と`article_title`に対応付けの候補を入れ、種別（条文か通達か）と発出元と発出日をpayloadに持たせて、このアプリの`ingest`と同じ`ChunkSink`で同じvectorDBに並べます。
-5. 照合。質問に関連する条文チャンクと通達チャンクを検索して同時にLLMへ渡します。通達側の`law_id`と`article`で条文と結び、`revisions.csv`の施行日と通達の発出日を並べて「どの版の条文に対する解釈か」を示します。改正後の条文に古い通達しか無い場合はその旨を示します。解釈と適用の判断はLLMと人が行い、この仕組みは本文と対応関係を供給するところまでです。
+1. 取得：[webgrab](https://github.com/okamyuji/webgrab)のようなHTML本文抽出ツールで一覧ページを定期的に取得し、前回との差分で新着と改正を検知します。本文ページをMarkdownにし、出典URLと取得日をfront matterに残します。省庁サイトには機械可読な更新一覧が無いので、取得件数の急変で止める保護をこのアプリの異常判定と同じ考え方で持ちます。ページ構造の変更で壊れる前提で監視します。
+2. 分割：文書自身の項番号を単位にします（通達の「36-1」、監督指針の「II-1-2」、審査基準の章節など）。条文の条番号と一対一ではないので、条文とは別の規則です。
+3. 対応付け：本文中の「労働基準法第三十六条第一項」のような参照を正規表現で拾い、`laws.csv`の題名で`law_id`に、条番号を`article`の値に変換して候補にします。確定は人またはLLMが行います。
+4. 登録：`law.Chunk`と同じキーのJSONLにします。`path`に文書名、`article`に項番号、`law_id`と`article_title`に対応付けの候補を入れ、種別（条文か通達か）と発出元と発出日をpayloadに持たせて、このアプリの`ingest`と同じ`ChunkSink`で同じvectorDBに並べます。
+5. 照合：質問に関連する条文チャンクと通達チャンクを検索して同時にLLMへ渡します。通達側の`law_id`と`article`で条文と結び、`revisions.csv`の施行日と通達の発出日を並べて「どの版の条文に対する解釈か」を示します。改正後の条文に古い通達しか無い場合はその旨を示します。解釈と適用の判断はLLMと人が行い、この仕組みは本文と対応関係を供給するところまでです。
 
 税法では、所得税法などの本則と施行令・施行規則をこのアプリが揃え、国税庁の法令解釈通達と質疑応答事例を上の流れで並べる形になります。租税特別措置法は改正と部分施行が多いので、施行日と発出日の並記が特に役立ちます。
 

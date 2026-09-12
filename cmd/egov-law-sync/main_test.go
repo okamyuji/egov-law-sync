@@ -20,7 +20,14 @@ func TestParseArgs(t *testing.T) {
 
 func TestParseBootstrapDefaults(t *testing.T) {
 	o, err := parseBootstrap(nil)
-	if err != nil || o.XMLDir != "bin/xml" || o.ZipPath != "bin/laws-xml.zip" || o.ReleaseTag != "" {
+	if err != nil || o.XMLDir != "bin/xml" || o.ZipPath != "bin/laws-xml.zip" || o.ReleaseTag != "" || o.Force {
+		t.Fatalf("o=%+v err=%v", o, err)
+	}
+}
+
+func TestParseBootstrapForce(t *testing.T) {
+	o, err := parseBootstrap([]string{"--force"})
+	if err != nil || !o.Force {
 		t.Fatalf("o=%+v err=%v", o, err)
 	}
 }

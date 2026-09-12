@@ -537,3 +537,179 @@ func stringifyRows(rows [][]string) []string {
 	}
 	return out
 }
+
+// seedLaws n件の法令を偽サーバに登録し、XMLも置く。IDはlawID(i)
+func seedLaws(srv *fakeServer, n int) {
+	for i := range n {
+		id := lawID(i)
+		srv.setLaw(mkLaw(id, id+"_1", "u1", "2020-01-01"))
+		srv.setXML(law.RevisionID(id+"_1"), lawXML("title-"+id, "本文"+id))
+	}
+}
+
+// seedFuture その法令に未施行改正を1件持たせる。bootstrapがrevisions.csvに行を書く前提を作る
+func seedFuture(srv *fakeServer, id law.LawID) {
+	srv.setFuture(mkLaw(string(id), string(id)+"_2", "u2", "2030-01-01"))
+	srv.setRevisions(id, []wireRevisionInfo{
+		{LawRevisionID: string(id) + "_1", LawTitle: "t", Updated: "u1", AmendmentEnforcementDate: "2020-01-01", CurrentRevisionStatus: "CurrentEnforced"},
+		{LawRevisionID: string(id) + "_2", LawTitle: "t", Updated: "u2", AmendmentEnforcementDate: "2030-01-01", CurrentRevisionStatus: "UnEnforced"},
+	})
+}
+
+// hasRow rowsの先頭列にkeyがあれば真
+func hasRow(rows [][]string, key string) bool {
+	return slices.ContainsFunc(rows, func(r []string) bool { return r[0] == key })
+}
+
+// manifestCSVs 3つのCSVの行。abort経路で「3つのCSVを変えない」を比較するために使う
+func manifestCSVs(t *testing.T, manifestDir string) map[string][][]string {
+	t.Helper()
+	out := map[string][][]string{}
+	for _, name := range []string{"laws.csv", "revisions.csv", "xml_index.csv"} {
+		out[name] = readRows(t, filepath.Join(manifestDir, name))
+	}
+	return out
+}
+
+// assertManifestUnchanged beforeと今の3つのCSVが行の集合として等しいことを確かめる
+func assertManifestUnchanged(t *testing.T, manifestDir string, before map[string][][]string) {
+	t.Helper()
+	for name, rows := range manifestCSVs(t, manifestDir) {
+		if !rowsEqual(before[name], rows) {
+			t.Fatalf("%s must not change on anomaly: before=%v after=%v", name, before[name], rows)
+		}
+	}
+}
+
+// runDailyYesterday 前日を終点に日次を1回実行し、終了コードを返す
+func runDailyYesterday(t *testing.T, env map[string]string, extra ...string) int {
+	t.Helper()
+	yesterday := law.DateOf(time.Now()).Add(-1)
+	args := append([]string{"daily", "--from", string(yesterday.Add(-3)), "--to", string(yesterday)}, extra...)
+	code, _, stderr := runCLI(t, env, args...)
+	if code != 0 && code != 3 {
+		t.Fatalf("daily exit=%d stderr=%s", code, stderr)
+	}
+	return code
+}
+
+// TestDailyFlowRemoved 導線7。101法令のうち1件（未施行改正あり）が/lawsから消えると、1%未満なので適用する。
+// INV-R1: laws.csvから消え、他の行は変わらない。INV-R2: revisions.csvとxml_index.csvには残る。
+// INV-R3: runsにremoved=1、unexpected=1、changesにremovedが載る。INV-R4: 消えた法令の/law_revisionsは取得しない
+func TestDailyFlowRemoved(t *testing.T) {
+	srv := newFakeServer()
+	seedLaws(srv, 101)
+	gone := law.LawID(lawID(1))
+	seedFuture(srv, gone)
+	ts := srv.start()
+	defer ts.Close()
+	manifestDir, work := t.TempDir(), t.TempDir()
+	env := baseEnv(ts.URL, manifestDir)
+	common := []string{"--release-tag", "t1", "--xml-dir", filepath.Join(work, "xml"), "--zip-path", filepath.Join(work, "x.zip"), "--text-dir", ""}
+
+	if code, _, stderr := runCLI(t, env, append([]string{"bootstrap"}, common...)...); code != 0 {
+		t.Fatalf("bootstrap exit=%d stderr=%s", code, stderr)
+	}
+	lawsBefore := readRows(t, filepath.Join(manifestDir, "laws.csv"))
+	revsBefore := readRows(t, filepath.Join(manifestDir, "revisions.csv"))
+	idxBefore := readRows(t, filepath.Join(manifestDir, "xml_index.csv"))
+	hitsBefore := srv.revisionHitCount(gone)
+
+	srv.removeLaw(gone)
+	if code := runDailyYesterday(t, env, common...); code != 0 {
+		t.Fatalf("daily exit=%d", code)
+	}
+
+	lawsAfter := readRows(t, filepath.Join(manifestDir, "laws.csv"))
+	if len(lawsAfter) != 100 || hasRow(lawsAfter, string(gone)) {
+		t.Fatalf("INV-R1: laws.csv rows=%d hasGone=%v", len(lawsAfter), hasRow(lawsAfter, string(gone)))
+	}
+	if !rowsEqual(slices.DeleteFunc(lawsBefore, func(r []string) bool { return r[0] == string(gone) }), lawsAfter) {
+		t.Fatal("INV-R1: other rows changed")
+	}
+	if !rowsEqual(revsBefore, readRows(t, filepath.Join(manifestDir, "revisions.csv"))) || !hasRow(revsBefore, string(gone)+"_2") {
+		t.Fatal("INV-R2: revisions.csv must keep the removed law")
+	}
+	if !rowsEqual(idxBefore, readRows(t, filepath.Join(manifestDir, "xml_index.csv"))) || !hasRow(idxBefore, string(gone)+"_1") {
+		t.Fatal("INV-R2: xml_index.csv must keep the removed law")
+	}
+	rec := lastRun(t, manifestDir, "daily")
+	if !rec.Applied || rec.Counts["removed"] != 1 || rec.Counts["unexpected"] != 1 || len(rec.Changes) != 1 || rec.Changes[0].Kind != "removed" || rec.Changes[0].LawID != gone {
+		t.Fatalf("INV-R3: rec=%+v", rec)
+	}
+	if srv.revisionHitCount(gone) != hitsBefore {
+		t.Fatal("INV-R4: removed law must not be fetched from /law_revisions")
+	}
+}
+
+// TestDailyFlowTotalDropped 導線8。INV-R5。3法令のうち1件が消えると1%超の減少なのでexit 3でCSVを変えず、--forceなら適用する
+func TestDailyFlowTotalDropped(t *testing.T) {
+	srv := newFakeServer()
+	seedLaws(srv, 3)
+	seedFuture(srv, law.LawID(lawID(1)))
+	ts := srv.start()
+	defer ts.Close()
+	manifestDir, work := t.TempDir(), t.TempDir()
+	env := baseEnv(ts.URL, manifestDir)
+	common := []string{"--release-tag", "t1", "--xml-dir", filepath.Join(work, "xml"), "--zip-path", filepath.Join(work, "x.zip"), "--text-dir", ""}
+	if code, _, stderr := runCLI(t, env, append([]string{"bootstrap"}, common...)...); code != 0 {
+		t.Fatalf("bootstrap exit=%d stderr=%s", code, stderr)
+	}
+	before := manifestCSVs(t, manifestDir)
+
+	srv.removeLaw(law.LawID(lawID(0)))
+	if code := runDailyYesterday(t, env, common...); code != 3 {
+		t.Fatalf("exit=%d", code)
+	}
+	assertManifestUnchanged(t, manifestDir, before)
+	rec := lastRun(t, manifestDir, "daily")
+	if rec.Applied || !slices.Contains(rec.Anomalies, "total_count_dropped") {
+		t.Fatalf("rec=%+v", rec)
+	}
+
+	time.Sleep(1100 * time.Millisecond)
+	if code := runDailyYesterday(t, env, append(common, "--force")...); code != 0 {
+		t.Fatalf("force exit=%d", code)
+	}
+	if laws := readRows(t, filepath.Join(manifestDir, "laws.csv")); len(laws) != 2 {
+		t.Fatalf("laws.csv rows=%v", laws)
+	}
+	if rec := lastRun(t, manifestDir, "daily"); !rec.Applied || rec.Counts["removed"] != 1 {
+		t.Fatalf("rec=%+v", rec)
+	}
+}
+
+// TestBootstrapRerunTotalDropped 導線9。INV-B1、INV-B2。bootstrap再実行で3法令のうち1件が消えていればexit 3でCSVを変えず、--forceなら適用する
+func TestBootstrapRerunTotalDropped(t *testing.T) {
+	srv := newFakeServer()
+	seedLaws(srv, 3)
+	seedFuture(srv, law.LawID(lawID(1)))
+	ts := srv.start()
+	defer ts.Close()
+	manifestDir, work := t.TempDir(), t.TempDir()
+	env := baseEnv(ts.URL, manifestDir)
+	common := []string{"--release-tag", "t1", "--xml-dir", filepath.Join(work, "xml"), "--zip-path", filepath.Join(work, "x.zip"), "--text-dir", ""}
+	if code, _, stderr := runCLI(t, env, append([]string{"bootstrap"}, common...)...); code != 0 {
+		t.Fatalf("bootstrap exit=%d stderr=%s", code, stderr)
+	}
+	before := manifestCSVs(t, manifestDir)
+
+	srv.removeLaw(law.LawID(lawID(0)))
+	time.Sleep(1100 * time.Millisecond)
+	if code, _, stderr := runCLI(t, env, append([]string{"bootstrap"}, common...)...); code != 3 {
+		t.Fatalf("rerun exit=%d stderr=%s", code, stderr)
+	}
+	assertManifestUnchanged(t, manifestDir, before)
+	rec := lastRun(t, manifestDir, "bootstrap")
+	if rec.Applied || !slices.Contains(rec.Anomalies, "total_count_dropped") || rec.Counts["removed"] != 1 || len(rec.Changes) != 1 {
+		t.Fatalf("rec=%+v", rec)
+	}
+
+	time.Sleep(1100 * time.Millisecond)
+	if code, _, stderr := runCLI(t, env, append([]string{"bootstrap", "--force"}, common...)...); code != 0 {
+		t.Fatalf("force exit=%d stderr=%s", code, stderr)
+	}
+	if laws := readRows(t, filepath.Join(manifestDir, "laws.csv")); len(laws) != 2 {
+		t.Fatalf("laws.csv rows=%v", laws)
+	}
+}

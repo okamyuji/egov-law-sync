@@ -61,11 +61,12 @@ func commonFlags(fs *flag.FlagSet) (releaseTag, xmlDir, zipPath, textDir, textZi
 func parseBootstrap(args []string) (application.BootstrapOptions, error) {
 	fs := newFlagSet("bootstrap")
 	releaseTag, xmlDir, zipPath, textDir, textZipPath := commonFlags(fs)
+	force := fs.Bool("force", false, "既存laws.csvからの減少判定を無視して適用する")
 	if err := fs.Parse(args); err != nil {
 		return application.BootstrapOptions{}, err
 	}
 	return application.BootstrapOptions{
-		ReleaseTag: *releaseTag, XMLDir: *xmlDir, ZipPath: *zipPath,
+		Force: *force, ReleaseTag: *releaseTag, XMLDir: *xmlDir, ZipPath: *zipPath,
 		TextDir: *textDir, TextZipPath: *textZipPath,
 	}, nil
 }

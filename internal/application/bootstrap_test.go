@@ -162,3 +162,78 @@ func TestBootstrapDoesNotWarnAtThreshold(t *testing.T) {
 		t.Fatalf("warnings=%v", res.Record.Warnings)
 	}
 }
+
+// seqLaws L000からn件の法令。revision_idは<id>_1
+func seqLaws(n int) []law.Law {
+	laws := make([]law.Law, 0, n)
+	for i := range n {
+		id := law.LawID(fmt.Sprintf("L%03d", i))
+		laws = append(laws, law.Law{ID: id, RevisionID: law.RevisionID(string(id) + "_1"), Updated: "u1"})
+	}
+	return laws
+}
+
+// INV-B1、INV-B4、INV-B5。既存laws.csvの200件に対し一覧が197件（1.5%減）なら、取得の前に止めて消失一覧を残す
+func TestBootstrapRerunTotalDroppedIsAnomaly(t *testing.T) {
+	f := newFakes()
+	f.repo.laws = seqLaws(200)
+	f.catalog.current = seqLaws(197)
+	f.catalog.future = []law.Law{{ID: "L000", RevisionID: "L000_2"}}
+	f.revisions.byLaw["L000"] = []law.Revision{{ID: "L000_2", LawID: "L000", Status: "UnEnforced"}}
+	res, err := NewBootstrapper(f.deps()).Run(context.Background(), BootstrapOptions{ReleaseTag: "t", XMLDir: t.TempDir()})
+	if err != nil || res.ExitCode != 3 {
+		t.Fatalf("res=%+v err=%v", res, err)
+	}
+	if f.repo.savedLaws || f.repo.savedXML || len(f.repo.runs) != 1 {
+		t.Fatalf("csv must not be written: savedLaws=%v savedXML=%v runs=%d", f.repo.savedLaws, f.repo.savedXML, len(f.repo.runs))
+	}
+	if !slices.Contains(res.Record.Anomalies, "total_count_dropped") {
+		t.Fatalf("anomalies=%v", res.Record.Anomalies)
+	}
+	if f.xml.calls != 0 || f.revisions.calls["L000"] != 0 {
+		t.Fatalf("fetch must not start before the check: xml=%d revisions=%d", f.xml.calls, f.revisions.calls["L000"])
+	}
+	if res.Record.Counts["removed"] != 3 || len(res.Record.Changes) != 3 || res.Record.Changes[0].LawID != "L197" || res.Record.Changes[0].Kind != "removed" {
+		t.Fatalf("counts=%v changes=%+v", res.Record.Counts, res.Record.Changes)
+	}
+}
+
+// INV-B1の境界。200件から198件（ちょうど1%）は異常にせず、消失2件を記録して適用する
+func TestBootstrapRerunDropAtThresholdApplies(t *testing.T) {
+	f := newFakes()
+	f.repo.laws = seqLaws(200)
+	f.catalog.current = seqLaws(198)
+	res, err := NewBootstrapper(f.deps()).Run(context.Background(), BootstrapOptions{XMLDir: t.TempDir()})
+	if err != nil || res.ExitCode != 0 || !f.repo.savedLaws {
+		t.Fatalf("res=%+v err=%v savedLaws=%v", res, err, f.repo.savedLaws)
+	}
+	if len(f.repo.laws) != 198 || res.Record.Counts["removed"] != 2 || len(res.Record.Changes) != 2 {
+		t.Fatalf("laws=%d counts=%v changes=%d", len(f.repo.laws), res.Record.Counts, len(res.Record.Changes))
+	}
+}
+
+// INV-B2。--forceなら1%超の減少でも適用する
+func TestBootstrapRerunForceApplies(t *testing.T) {
+	f := newFakes()
+	f.repo.laws = seqLaws(200)
+	f.catalog.current = seqLaws(197)
+	res, err := NewBootstrapper(f.deps()).Run(context.Background(), BootstrapOptions{XMLDir: t.TempDir(), Force: true})
+	if err != nil || res.ExitCode != 0 || !f.repo.savedLaws || len(f.repo.laws) != 197 {
+		t.Fatalf("res=%+v err=%v savedLaws=%v", res, err, f.repo.savedLaws)
+	}
+	if len(res.Record.Anomalies) != 0 || res.Record.Counts["removed"] != 3 {
+		t.Fatalf("record=%+v", res.Record)
+	}
+}
+
+// INV-B3。laws.csvが無ければ減少判定はしない（一覧0件でも適用する）
+func TestBootstrapFirstRunSkipsDropCheck(t *testing.T) {
+	f := newFakes()
+	res, err := NewBootstrapper(f.deps()).Run(context.Background(), BootstrapOptions{XMLDir: t.TempDir()})
+	if err != nil || res.ExitCode != 0 || !f.repo.savedLaws {
+		t.Fatalf("res=%+v err=%v savedLaws=%v", res, err, f.repo.savedLaws)
+	}
+	if _, ok := res.Record.Counts["removed"]; ok {
+		t.Fatalf("removed must not be counted on first run: %v", res.Record.Counts)
+	}
+}

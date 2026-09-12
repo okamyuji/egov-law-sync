@@ -1,6 +1,8 @@
 name: bootstrap
 on:
   workflow_dispatch:
+    inputs:
+      force: { description: "trueで既存laws.csvからの減少判定を無視", required: false, default: "false" }
 permissions:
   contents: write
   issues: write
@@ -12,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
+      FORCE: ${{ inputs.force }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
@@ -29,8 +32,10 @@ jobs:
       - id: run
         run: |
           set +e
+          args=(bootstrap --release-tag "${{ steps.tag.outputs.tag }}" --xml-dir bin/xml)
+          [ "$FORCE" = "true" ] && args+=(--force)
           touch bin/run-start
-          bin/egov-law-sync bootstrap --release-tag "${{ steps.tag.outputs.tag }}" --xml-dir bin/xml
+          bin/egov-law-sync "${args[@]}"
           echo "code=$?" >> "$GITHUB_OUTPUT"
       - name: release
         if: steps.run.outputs.code == '0'

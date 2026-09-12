@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/okamyuji/egov-law-sync/internal/domain/law"
+	"github.com/okamyuji/egov-law-sync/internal/domain/sync"
 )
 
 // futureAsof 未施行改正を持つ法令を洗い出すための十分に遠い日付
@@ -12,6 +13,7 @@ const futureAsof = "2099-12-31"
 
 // BootstrapOptions bootstrapの実行時オプション
 type BootstrapOptions struct {
+	Force       bool
 	ReleaseTag  string
 	XMLDir      string
 	ZipPath     string
@@ -47,6 +49,13 @@ func (b *bootstrapper) Run(ctx context.Context, o BootstrapOptions) (Result, err
 	if len(laws) != total {
 		return b.countMismatch(rec, start)
 	}
+	dropped, err := b.checkDrop(laws, total, o.Force, &rec)
+	if err != nil {
+		return Result{}, err
+	}
+	if dropped {
+		return saveRun(b.d, rec, start, 3)
+	}
 	targets, complete, err := b.futureTargets(ctx, laws)
 	if err != nil {
 		return Result{}, err
@@ -71,6 +80,28 @@ func (b *bootstrapper) Run(ctx context.Context, o BootstrapOptions) (Result, err
 func (b *bootstrapper) countMismatch(rec RunRecord, start time.Time) (Result, error) {
 	rec.Anomalies = append(rec.Anomalies, "count_mismatch")
 	return saveRun(b.d, rec, start, 3)
+}
+
+// checkDrop 再実行で既存laws.csvより一覧が減っていないかを、本文取得の前に判定する。消失した法令はruns/に一覧で残す。真なら異常
+func (b *bootstrapper) checkDrop(laws []law.Law, total int, force bool, rec *RunRecord) (bool, error) {
+	prev, err := b.d.Repo.LoadLaws()
+	if err != nil {
+		return false, err
+	}
+	if len(prev) == 0 {
+		return false, nil
+	}
+	for _, c := range sync.Classify(prev, laws) {
+		if c.Kind == sync.Removed {
+			rec.Changes = append(rec.Changes, c)
+		}
+	}
+	rec.Counts["removed"] = len(rec.Changes)
+	as := sync.CheckAnomalies(0, len(prev), total, b.d.Threshold, force)
+	for _, a := range as {
+		rec.Anomalies = append(rec.Anomalies, string(a))
+	}
+	return len(as) > 0, nil
 }
 
 // futureTargets asof指定の一覧と現在の一覧でrevision_idが異なる法令。第2戻り値は一覧が全件揃っているか

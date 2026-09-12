@@ -60,6 +60,7 @@ type fakeServer struct {
 	sec1Override   map[law.RevisionID][]byte
 	v1Found        map[law.Date][]law.LawID
 	sec3Found      map[law.Date][]string
+	revisionHits   map[law.LawID]int
 }
 
 func newFakeServer() *fakeServer {
@@ -71,7 +72,22 @@ func newFakeServer() *fakeServer {
 		sec1Override:   map[law.RevisionID][]byte{},
 		v1Found:        map[law.Date][]law.LawID{},
 		sec3Found:      map[law.Date][]string{},
+		revisionHits:   map[law.LawID]int{},
 	}
+}
+
+// removeLaw /lawsからその法令を消す
+func (s *fakeServer) removeLaw(id law.LawID) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.laws, id)
+}
+
+// revisionHitCount /law_revisions/{id}が呼ばれた回数
+func (s *fakeServer) revisionHitCount(id law.LawID) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.revisionHits[id]
 }
 
 func (s *fakeServer) setLaw(l law.Law) {
@@ -166,6 +182,7 @@ func (s *fakeServer) handleRevisions(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	id := law.LawID(strings.TrimPrefix(r.URL.Path, "/law_revisions/"))
+	s.revisionHits[id]++
 	if revs, ok := s.extraRevisions[id]; ok {
 		_ = json.NewEncoder(w).Encode(wireRevisionsResponse{Revisions: revs})
 		return
