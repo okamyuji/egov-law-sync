@@ -171,7 +171,7 @@ Actionsのワークフローは`okamyuji/reusable-workflows@v1`のGo CIとsecuri
 |---|---|---|
 | `v<MAJOR>.<MINOR>.<PATCH>` | bootstrap、日次、週次で本文を1件でも取得した実行 | 取得したXMLとindex.csvをまとめた`laws-xml.zip`と、同じ法令のMarkdownとJSONLをまとめた`laws-text.zip` |
 
-タグはsemantic versionです。`MAJOR.MINOR`はリポジトリ直下の`VERSION`（現在は`0.0`）が持ち、PRでだけ変えます。`PATCH`は`tools/next-version.sh`が既存Releaseのタグから同じ`MAJOR.MINOR`の最大値を求めて1を足します。既存タグが無ければ1です。bootstrap、日次、週次は同じ1系列に入り、Releaseのタイトルはタグ、種別、JST日付を空白で区切って書きます。Releaseを手で削除するとPATCHが再利用され、過去のrelease_tagが別の内容を指すので、Releaseは削除しません。タグはワークフローが決めてCLIに`--release-tag`で渡し、CLIはxml_index.csvのrelease_tagにその値を書きます。公開直後に作った`bootstrap-<UTC時刻>`のReleaseは、この規則の前のものとして残しています。CLIは取得したXMLを`--xml-dir`のディレクトリに`<revision_id>.xml`として書き、ReleaseBundlerがそのディレクトリからzipを作ります。bootstrapでは約3.2GBがディスクに置かれますが、Actionsのディスク約14GBに収まります。
+タグはsemantic versionです。`MAJOR.MINOR`はリポジトリ直下の`VERSION`（現在は`0.1`）が持ち、PRでだけ変えます。`PATCH`は`tools/next-version.sh`が既存Releaseのタグから同じ`MAJOR.MINOR`の最大値を求めて1を足します。既存タグが無ければ1です。bootstrap、日次、週次は同じ1系列に入り、Releaseのタイトルはタグ、種別、JST日付を空白で区切って書きます。Releaseを手で削除するとPATCHが再利用され、過去のrelease_tagが別の内容を指すので、Releaseは削除しません。タグはワークフローが決めてCLIに`--release-tag`で渡し、CLIはxml_index.csvのrelease_tagにその値を書きます。公開直後に作った`bootstrap-<UTC時刻>`のReleaseは、この規則の前のものとして残しています。CLIは取得したXMLを`--xml-dir`のディレクトリに`<revision_id>.xml`として書き、ReleaseBundlerがそのディレクトリからzipを作ります。bootstrapでは約3.2GBがディスクに置かれますが、Actionsのディスク約14GBに収まります。
 
 zipの契約は次のとおりです。
 
@@ -375,4 +375,4 @@ CRAP値はカバレッジ80%のもとでは循環的複雑度13以下とほぼ�
 
 対象別の`/laws`はAPI側で法令IDの部分一致検索を行った後、応答をID完全一致で絞ります。件数と減少判定はその同期範囲だけで計算します。v1の更新一覧およびv1が404の日のsec3照合は、対象ID以外を改正取得対象にしません。週次sec1 zipはAPIに一件限定の取得口がないため従来どおり全件を取得し、対象IDの改正だけを照合します。対象別実行の`zip_only`は全件zipとの比較では意味をなさないため計上しません。
 
-新規`law-filter.yml`は既存の定期Actionsを変更せず手動起動します。`law_id`の既定値は所得税法の`340AC0000000033`です。初回は`bootstrap`、後続は`daily`または`weekly`を選びます。法令IDごとの`manifest/scoped/<law_id>/`に保存し、本文のzipは対象別のReleaseに添付します。施行令・施行規則を同期する場合は別IDと別manifestで実行します。複数法令を一つのmanifestへ統合する仕様はありません。
+新規`law-filter.yml`は既存の定期Actionsを変更せず手動起動します。`law_id`の既定値は所得税法の`340AC0000000033`です。初回は`bootstrap`、後続は`daily`または`weekly`を選びます。法令IDごとの`manifest/scoped/<law_id>/`に保存し、本文のzipは対象別のReleaseに添付します。施行令・施行規則を同期する場合は別IDと別manifestで実行します。複数法令を一つのmanifestへ統合する仕様はありません。対象別ActionsのReleaseも`tools/next-version.sh`で既存の全件Releaseと共通のタグを採番します。機能追加時点の`VERSION`は`0.1`です。法令IDと正式名称の全件一覧は[docs/law-ids.md](law-ids.md)にあります。

@@ -153,6 +153,19 @@ bin/egov-law-sync weekly                                            # sec1 zip�
 bin/egov-law-sync ingest bin/text                                   # MarkdownとJSONLの置き場からChunkSinkへ登録する（既定はno-op）
 ```
 
+### 法令IDを探す
+
+[法令IDと正式名称の全件一覧](docs/law-ids.md)から名称を検索してください。最新の正本は[manifest/laws.csv](manifest/laws.csv)です。よく使う税法本則と施行令の法令IDは次のとおりです。対象別Actionsでは一度に一つのIDを指定します。
+
+| 法令名 | 法令ID | 施行令 | 法令ID |
+|---|---|---|---|
+| 所得税法 | `340AC0000000033` | 所得税法施行令 | `340CO0000000096` |
+| 法人税法 | `340AC0000000034` | 法人税法施行令 | `340CO0000000097` |
+| 消費税法 | `363AC0000000108` | 消費税法施行令 | `363CO0000000360` |
+| 相続税法 | `325AC0000000073` | 相続税法施行令 | `325CO0000000071` |
+| 国税通則法 | `337AC0000000066` | 国税通則法施行令 | `337CO0000000135` |
+| 租税特別措置法 | `332AC0000000026` | 租税特別措置法施行令 | `332CO0000000043` |
+
 ### 一つの法令だけを同期する
 
 全件用の`manifest/`を指定したまま`--law-id`を実行しないでください。法令IDごとに別の`EGOV_MANIFEST_DIR`を用意し、初回は`bootstrap`、以降は同じIDで`daily`と`weekly`を実行します。例として民法の法令IDを指定します。
@@ -173,11 +186,11 @@ bin/egov-law-sync weekly --law-id 129AC0000000089
 
 GitHubのActionsタブで`law-filter`を選び、`Run workflow`から初回は`command=bootstrap`を実行します。`law_id`を空欄にすると所得税法（`340AC0000000033`）を選びます。「税法」は単独の法令名ではありません。法人税法など別の税法を取る場合は対応する法令IDを入力してください。
 
-初回が成功したら、必要な日に同じ`law_id`で`command=daily`を実行します。週次照合は同じIDで`command=weekly`を選びます。この新規ワークフローは手動実行のみで、既存の`bootstrap.yml`、`daily.yml`、`weekly.yml`による全件の定期実行は変更しません。結果は`manifest/scoped/<law_id>/`にcommitされ、取得した本文がある場合のみ対象別のReleaseに添付されます。失敗時は新しいCSVをcommitしないため、Actionsの実行ログを確認してください。
+初回が成功したら、必要な日に同じ`law_id`で`command=daily`を実行します。週次照合は同じIDで`command=weekly`を選びます。この新規ワークフローは手動実行のみで、既存の`bootstrap.yml`、`daily.yml`、`weekly.yml`による全件の定期実行は変更しません。結果は`manifest/scoped/<law_id>/`にcommitされ、取得した本文がある場合のみ対象別のReleaseに添付されます。Releaseタグは全件同期と共通の`VERSION`から`next-version.sh`で採番されます。機能追加に伴い`VERSION`は`0.1`となり、最初の新タグは`v0.1.1`です。失敗時は新しいCSVをcommitしないため、Actionsの実行ログを確認してください。
 
 共通のオプションは`--release-tag`、`--xml-dir`（既定値`bin/xml`）、`--zip-path`（既定値`bin/laws-xml.zip`）、`--text-dir`（既定値`bin/text`。空なら変換しない）、`--text-zip-path`（既定値`bin/laws-text.zip`）です。`daily`はさらに`--from`、`--to`、`--force`を受け取ります。`bootstrap`は`--force`を受け取り、既存のlaws.csvより一覧が1%超少ないときの異常判定を無視します。
 
-Releaseのタグは`v0.0.1`のようなsemantic versionです。`MAJOR.MINOR`はリポジトリ直下の`VERSION`が持ち、変えるときは`VERSION`を書き換えるPRを出します。`PATCH`は実行のたびに既存のReleaseから自動で採番します。各Releaseには`laws-xml.zip`（取得したXMLとindex.csv）と`laws-text.zip`（同じ法令の`<revision_id>.md`、`<revision_id>.jsonl`、index.csv）が付きます。Markdownは先頭にlaw_id、revision_id、施行日、出典URLのfront matterを持ち、条を`####`の見出しにした本文が続きます。JSONLは1行が1条で、法令ID、revision_id、法令名、施行日、位置、条番号、見出し、本文、出典URLを持ちます。
+Releaseのタグは`v0.1.1`のようなsemantic versionです。所得税法の初回Releaseの日時タグ`law-340AC0000000033-20260923T124159Z`は採番方式変更前のものとして残します。`MAJOR.MINOR`はリポジトリ直下の`VERSION`が持ち、変えるときは`VERSION`を書き換えるPRを出します。`PATCH`は実行のたびに既存のReleaseから自動で採番します。各Releaseには`laws-xml.zip`（取得したXMLとindex.csv）と`laws-text.zip`（同じ法令の`<revision_id>.md`、`<revision_id>.jsonl`、index.csv）が付きます。Markdownは先頭にlaw_id、revision_id、施行日、出典URLのfront matterを持ち、条を`####`の見出しにした本文が続きます。JSONLは1行が1条で、法令ID、revision_id、法令名、施行日、位置、条番号、見出し、本文、出典URLを持ちます。
 
 終了コードは4つです。
 
