@@ -28,6 +28,8 @@ Subcommands:
   ingest <text-dir>   JSONLを読んでChunkSinkへ登録する（既定はnoop）
 
 Flags (bootstrap, daily, weekly共通):
+  --law-id string       法令IDを厳密に指定（専用のEGOV_MANIFEST_DIRが必要）
+  --law-title string    法令名または略称の完全一致で指定（--law-idとは併用不可）
   --release-tag string    GitHub Releaseのタグ。空なら本文取得をしない
   --xml-dir string        XMLの保存先ディレクトリ（既定値 bin/xml）
   --zip-path string       リリース用zipの出力先（既定値 bin/laws-xml.zip）

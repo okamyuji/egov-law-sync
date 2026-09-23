@@ -8,6 +8,7 @@ type Law struct {
 	ID              LawID
 	Type            string
 	Title           string
+	Abbrev          string
 	RevisionID      RevisionID
 	Updated         string // /lawsのrevision_info.updatedをそのまま
 	EnforcementDate string // YYYY-MM-DD

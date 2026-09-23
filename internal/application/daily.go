@@ -25,6 +25,7 @@ var ErrInvalidStoredDate = errors.New("application: stored date in runs/ is not 
 
 // DailyOptions 日次の実行時オプション。FromとToが空なら自動で決める
 type DailyOptions struct {
+	Selection
 	From, To    law.Date
 	Force       bool
 	ReleaseTag  string
@@ -174,7 +175,9 @@ func (s *dailySyncer) collectUpdated(ctx context.Context, rg dailyRange, rec *Ru
 		}
 		if found {
 			for _, id := range updated {
-				ids[id] = true
+				if s.d.Scope == "" || id == s.d.Scope {
+					ids[id] = true
+				}
 			}
 			continue
 		}
@@ -195,9 +198,12 @@ func (s *dailySyncer) crossCheckSec3(ctx context.Context, d law.Date, ids map[la
 	if !found || len(dirs) == 0 {
 		return
 	}
-	addWarning(rec, "sec3_has_updates_v1_missing")
 	for _, dir := range dirs {
-		ids[law.LawID(strings.Split(dir, "_")[0])] = true
+		id := law.LawID(strings.Split(dir, "_")[0])
+		if s.d.Scope == "" || id == s.d.Scope {
+			addWarning(rec, "sec3_has_updates_v1_missing")
+			ids[id] = true
+		}
 	}
 }
 
@@ -249,7 +255,9 @@ func (s *dailySyncer) revisionTargets(updated map[law.LawID]bool, changes []sync
 		return nil, err
 	}
 	for _, id := range pending {
-		set[id] = true
+		if s.d.Scope == "" || id == s.d.Scope {
+			set[id] = true
+		}
 	}
 	targets := make([]law.LawID, 0, len(set))
 	for id := range set {

@@ -24,6 +24,7 @@ type wireLawInfo struct {
 type wireRevisionInfo struct {
 	LawRevisionID            string `json:"law_revision_id"`
 	LawTitle                 string `json:"law_title"`
+	Abbrev                   string `json:"abbrev"`
 	Updated                  string `json:"updated"`
 	AmendmentEnforcementDate string `json:"amendment_enforcement_date"`
 	AmendmentPromulgateDate  string `json:"amendment_promulgate_date"`
@@ -151,6 +152,18 @@ func (s *fakeServer) handleLaws(w http.ResponseWriter, r *http.Request) {
 		ids = append(ids, string(id))
 	}
 	slices.Sort(ids)
+	filtered := make([]string, 0, len(ids))
+	for _, id := range ids {
+		item := s.laws[law.LawID(id)]
+		if q := r.URL.Query().Get("law_id"); q != "" && !strings.Contains(id, q) {
+			continue
+		}
+		if q := r.URL.Query().Get("law_title"); q != "" && !strings.Contains(item.Title, q) {
+			continue
+		}
+		filtered = append(filtered, id)
+	}
+	ids = filtered
 	page := wireLawsPage{TotalCount: len(ids)}
 	for i, id := range ids {
 		if i < offset {

@@ -34,11 +34,54 @@ var (
 )
 
 // Repo application.ManifestRepositoryの実装。dir配下にlaws.csv、revisions.csv、xml_index.csv、runs/を持つ
-type Repo struct{ dir string }
+type Repo struct {
+	dir   string
+	scope law.LawID
+}
 
 // New dirを正本の置き場所とするRepoを作る
 func New(dir string) *Repo {
 	return &Repo{dir: dir}
+}
+
+// CheckScope 既存の全件・対象別manifestとの混在を、取得と書き込みの前に拒否する。
+func (r *Repo) CheckScope(id law.LawID) error {
+	body, err := os.ReadFile(filepath.Join(r.dir, "scope.json"))
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err == nil {
+		var stored struct {
+			LawID law.LawID `json:"law_id"`
+		}
+		if json.Unmarshal(body, &stored) != nil || !law.ValidID(string(stored.LawID)) {
+			return errors.New("csv: invalid scope.json")
+		}
+		if stored.LawID != id {
+			return fmt.Errorf("csv: manifest is scoped to %s; use a different EGOV_MANIFEST_DIR", stored.LawID)
+		}
+	} else if id != "" {
+		rows, loadErr := r.LoadLaws()
+		if loadErr != nil {
+			return loadErr
+		}
+		if len(rows) != 0 {
+			return errors.New("csv: existing full manifest cannot be scoped; use a different EGOV_MANIFEST_DIR")
+		}
+	}
+	if id != "" {
+		laws, loadErr := r.LoadLaws()
+		if loadErr != nil {
+			return loadErr
+		}
+		for _, item := range laws {
+			if item.ID != id {
+				return fmt.Errorf("csv: manifest contains %s, expected %s", item.ID, id)
+			}
+		}
+	}
+	r.scope = id
+	return nil
 }
 
 // writeCSV headerと行をpathへ書く。<path>.tmpへ書いてからrenameで置き換える
@@ -113,6 +156,28 @@ func (r *Repo) LoadLaws() ([]law.Law, error) {
 
 // SaveLaws laws.csvへlaw_idでソートして書く
 func (r *Repo) SaveLaws(laws []law.Law) error {
+	for _, item := range laws {
+		if r.scope != "" && item.ID != r.scope {
+			return fmt.Errorf("csv: %s is outside selected scope %s", item.ID, r.scope)
+		}
+	}
+	if r.scope != "" {
+		path := filepath.Join(r.dir, "scope.json")
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			body, _ := json.Marshal(struct {
+				LawID law.LawID `json:"law_id"`
+			}{r.scope})
+			if err := os.WriteFile(path+".tmp", body, 0o644); err != nil {
+				return err
+			}
+			if err := os.Rename(path+".tmp", path); err != nil {
+				return err
+			}
+		} else if err != nil {
+			return err
+		}
+	}
+
 	sorted := slices.Clone(laws)
 	slices.SortFunc(sorted, func(a, b law.Law) int { return cmp.Compare(a.ID, b.ID) })
 	rows := make([][]string, 0, len(sorted))

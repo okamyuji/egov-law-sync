@@ -115,3 +115,17 @@ func TestWeeklyWarnsWhenXMLFailuresExceedThreshold(t *testing.T) {
 		t.Fatalf("counts=%v warnings=%v", res.Record.Counts, res.Record.Warnings)
 	}
 }
+
+func TestScopedWeeklyDoesNotCountUnrelatedZipEntries(t *testing.T) {
+	f := newFakes()
+	f.repo.laws = []law.Law{{ID: "A", RevisionID: "A_1", RepealStatus: "None"}}
+	f.repo.xml = map[law.RevisionID]law.XMLRecord{"A_1": {RevisionID: "A_1", SHA256: "cur"}}
+	f.bulk.sha["A_1"] = "cur"
+	f.bulk.sha["B_1"] = "other"
+	deps := f.deps()
+	deps.Scope = "A"
+	res, err := NewWeeklyChecker(deps).Run(context.Background(), WeeklyOptions{})
+	if err != nil || res.ExitCode != 0 || res.Record.Counts["zip_only"] != 0 || f.bulk.lookups["A_1"] != 1 {
+		t.Fatalf("result=%+v err=%v", res, err)
+	}
+}

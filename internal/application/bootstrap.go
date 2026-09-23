@@ -13,6 +13,7 @@ const futureAsof = "2099-12-31"
 
 // BootstrapOptions bootstrapの実行時オプション
 type BootstrapOptions struct {
+	Selection
 	Force       bool
 	ReleaseTag  string
 	XMLDir      string

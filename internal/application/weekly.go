@@ -8,6 +8,7 @@ import (
 
 // WeeklyOptions 週次の実行時オプション
 type WeeklyOptions struct {
+	Selection
 	ReleaseTag  string
 	XMLDir      string
 	ZipPath     string
@@ -53,7 +54,9 @@ func (w *weeklyChecker) Run(ctx context.Context, o WeeklyOptions) (Result, error
 	if err != nil {
 		return Result{}, err
 	}
-	countZipOnly(archive, laws, &rec)
+	if w.d.Scope == "" {
+		countZipOnly(archive, laws, &rec)
+	}
 	if o.ReleaseTag != "" {
 		fetched := w.repair(ctx, mismatched, index, o, &rec, lg)
 		warnXMLFailures(w.d, &rec)
