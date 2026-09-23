@@ -25,7 +25,11 @@ jobs:
       LAW_ID: ${{ inputs.law_id }}
       COMMAND: ${{ inputs.command }}
     steps:
+      - name: Require main branch
+        run: test "$GITHUB_REF" = refs/heads/main
       - uses: actions/checkout@v7
+        with:
+          ref: main
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
