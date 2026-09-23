@@ -153,6 +153,28 @@ bin/egov-law-sync weekly                                            # sec1 zip�
 bin/egov-law-sync ingest bin/text                                   # MarkdownとJSONLの置き場からChunkSinkへ登録する（既定はno-op）
 ```
 
+### 一つの法令だけを同期する
+
+全件用の`manifest/`を指定したまま`--law-id`を実行しないでください。法令IDごとに別の`EGOV_MANIFEST_DIR`を用意し、初回は`bootstrap`、以降は同じIDで`daily`と`weekly`を実行します。例として民法の法令IDを指定します。
+
+```sh
+make build
+export EGOV_MANIFEST_DIR=manifest/scoped/129AC0000000089
+bin/egov-law-sync bootstrap --law-id 129AC0000000089
+bin/egov-law-sync daily --law-id 129AC0000000089
+bin/egov-law-sync weekly --law-id 129AC0000000089
+```
+
+`bootstrap --law-title 民法`も指定できます。正式名称または略称が完全一致で一件だけ見つかった場合に限り、その法令IDを`scope.json`へ保存します。候補がゼロ件または複数件なら候補を表示して終了コード2で止まるので、`--law-id`で指定し直してください。`--law-id`と`--law-title`は併用できません。改称に備え、継続実行では法令IDを使ってください。
+
+一つのmanifestには一つの法令IDだけが入ります。指定を外した実行や別IDへの変更は終了コード2で拒否します。別の法律、施行令、施行規則を取る場合は各IDの新しいディレクトリで`bootstrap`から始めてください。`--force`でも同期対象の変更はできません。日次の更新一覧は全件取得後にIDで絞り、週次のbulk zipは全件分をダウンロードした上で選択した法令だけを照合します。
+
+### GitHub Actionsで一つの法令を同期する
+
+GitHubのActionsタブで`law-filter`を選び、`Run workflow`から初回は`command=bootstrap`を実行します。`law_id`を空欄にすると所得税法（`340AC0000000033`）を選びます。「税法」は単独の法令名ではありません。法人税法など別の税法を取る場合は対応する法令IDを入力してください。
+
+初回が成功したら、必要な日に同じ`law_id`で`command=daily`を実行します。週次照合は同じIDで`command=weekly`を選びます。この新規ワークフローは手動実行のみで、既存の`bootstrap.yml`、`daily.yml`、`weekly.yml`による全件の定期実行は変更しません。結果は`manifest/scoped/<law_id>/`にcommitされ、取得した本文がある場合のみ対象別のReleaseに添付されます。失敗時は新しいCSVをcommitしないため、Actionsの実行ログを確認してください。
+
 共通のオプションは`--release-tag`、`--xml-dir`（既定値`bin/xml`）、`--zip-path`（既定値`bin/laws-xml.zip`）、`--text-dir`（既定値`bin/text`。空なら変換しない）、`--text-zip-path`（既定値`bin/laws-text.zip`）です。`daily`はさらに`--from`、`--to`、`--force`を受け取ります。`bootstrap`は`--force`を受け取り、既存のlaws.csvより一覧が1%超少ないときの異常判定を無視します。
 
 Releaseのタグは`v0.0.1`のようなsemantic versionです。`MAJOR.MINOR`はリポジトリ直下の`VERSION`が持ち、変えるときは`VERSION`を書き換えるPRを出します。`PATCH`は実行のたびに既存のReleaseから自動で採番します。各Releaseには`laws-xml.zip`（取得したXMLとindex.csv）と`laws-text.zip`（同じ法令の`<revision_id>.md`、`<revision_id>.jsonl`、index.csv）が付きます。Markdownは先頭にlaw_id、revision_id、施行日、出典URLのfront matterを持ち、条を`####`の見出しにした本文が続きます。JSONLは1行が1条で、法令ID、revision_id、法令名、施行日、位置、条番号、見出し、本文、出典URLを持ちます。
