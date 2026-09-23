@@ -44,7 +44,7 @@ jobs:
           [[ "$COMMAND" =~ ^(bootstrap|daily|weekly)$ ]] || exit 2
           echo "law_id=$law_id" >> "$GITHUB_OUTPUT"
           export EGOV_MANIFEST_DIR="manifest/scoped/$law_id"
-          tag="law-$law_id-$(date -u +%Y%m%dT%H%M%SZ)"
+          tag=$(bash tools/next-version.sh)
           mkdir -p "bin/scoped/$law_id"
           bin/egov-law-sync "$COMMAND" --law-id "$law_id" --release-tag "$tag" \
             --xml-dir "bin/scoped/$law_id/xml" --text-dir "bin/scoped/$law_id/text" \
@@ -60,7 +60,7 @@ jobs:
             [ ! -f "$file" ] || assets+=("$file")
           done
           if [ "${#assets[@]}" -gt 0 ]; then
-            gh release create "$TAG" "${assets[@]}" --title "$COMMAND $LAW_ID" --notes "出典: e-Gov法令検索（デジタル庁）"
+            gh release create "$TAG" "${assets[@]}" --title "$TAG $COMMAND $LAW_ID" --notes "出典: e-Gov法令検索（デジタル庁）"
           fi
       - name: Persist scoped manifest
         env:
