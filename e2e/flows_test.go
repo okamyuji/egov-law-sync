@@ -717,3 +717,27 @@ func TestBootstrapRerunTotalDropped(t *testing.T) {
 		t.Fatalf("laws.csv rows=%v", laws)
 	}
 }
+
+// TestScopedBootstrapFlow 対象IDだけを保存し、同じmanifestでの変更や全件実行を拒否する。
+func TestScopedBootstrapFlow(t *testing.T) {
+	srv := newFakeServer()
+	srv.setLaw(mkLaw("A", "A_1", "u1", "2020-01-01"))
+	srv.setLaw(mkLaw("AB", "AB_1", "u1", "2020-01-01"))
+	ts := srv.start()
+	defer ts.Close()
+	dir := t.TempDir()
+	env := baseEnv(ts.URL, dir)
+	code, _, stderr := runCLI(t, env, "bootstrap", "--law-id", "A")
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, stderr)
+	}
+	if rows := readRows(t, filepath.Join(dir, "laws.csv")); len(rows) != 1 || rows[0][0] != "A" {
+		t.Fatalf("rows=%v", rows)
+	}
+	for _, args := range [][]string{{"daily", "--law-id", "AB"}, {"weekly"}} {
+		code, _, stderr = runCLI(t, env, args...)
+		if code != 2 || !strings.Contains(stderr, "manifest is scoped") {
+			t.Fatalf("args=%v exit=%d stderr=%s", args, code, stderr)
+		}
+	}
+}

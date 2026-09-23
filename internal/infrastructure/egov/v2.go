@@ -5,18 +5,23 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	neturl "net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/okamyuji/egov-law-sync/internal/domain/law"
 )
 
 // listLimit /lawsの1ページあたり件数。9567件を2ページで取り切れる上限値
 const listLimit = 5000
+
+// ErrTitleNotUnique 法令名または略称が一件に解決しない。
+var ErrTitleNotUnique = errors.New("law title is not unique")
 
 // lawsPage /lawsの1ページ分
 type lawsPage struct {
@@ -35,6 +40,7 @@ type lawsPage struct {
 type revisionInfo struct {
 	LawRevisionID            string `json:"law_revision_id"`
 	LawTitle                 string `json:"law_title"`
+	Abbrev                   string `json:"abbrev"`
 	Updated                  string `json:"updated"`
 	AmendmentEnforcementDate string `json:"amendment_enforcement_date"`
 	AmendmentPromulgateDate  string `json:"amendment_promulgate_date"`
@@ -50,6 +56,47 @@ type revisionsResponse struct {
 
 // ListAll /lawsを全件取得する。1ページ目のtotal_countを返す。revision_infoが無い行は飛ばす。countが0にならないまま応答し続けるサーバーへの対策として、offsetがtotalを超えるか、(total/limit)+2ページを超えたら打ち切る
 func (c *Client) ListAll(ctx context.Context, asof string) ([]law.Law, int, error) {
+	return c.list(ctx, asof, "", "")
+}
+
+// ListByID APIの部分一致結果から指定した法令IDだけを返す。
+func (c *Client) ListByID(ctx context.Context, asof string, id law.LawID) ([]law.Law, int, error) {
+	laws, _, err := c.list(ctx, asof, string(id), "")
+	if err != nil {
+		return nil, 0, err
+	}
+	var exact []law.Law
+	for _, item := range laws {
+		if item.ID == id {
+			exact = append(exact, item)
+		}
+	}
+	return exact, len(exact), nil
+}
+
+// ResolveTitle 部分一致検索後、正式名称または略称の完全一致が一件のときだけIDを返す。
+func (c *Client) ResolveTitle(ctx context.Context, title string) (law.LawID, error) {
+	laws, _, err := c.list(ctx, "", "", title)
+	if err != nil {
+		return "", err
+	}
+	var matches []law.Law
+	for _, item := range laws {
+		if item.Title == title || item.Abbrev == title {
+			matches = append(matches, item)
+		}
+	}
+	if len(matches) == 1 {
+		return matches[0].ID, nil
+	}
+	var candidates []string
+	for _, item := range laws {
+		candidates = append(candidates, fmt.Sprintf("%s (%s)", item.Title, item.ID))
+	}
+	return "", fmt.Errorf("%w: %q: %d exact matches; specify --law-id; candidates: %s", ErrTitleNotUnique, title, len(matches), strings.Join(candidates, ", "))
+}
+
+func (c *Client) list(ctx context.Context, asof, id, title string) ([]law.Law, int, error) {
 	var laws []law.Law
 	total := 0
 	offset := 0
@@ -58,6 +105,12 @@ func (c *Client) ListAll(ctx context.Context, asof string) ([]law.Law, int, erro
 		url := fmt.Sprintf("%s/laws?limit=%d&offset=%d&response_format=json", c.v2Base, listLimit, offset)
 		if asof != "" {
 			url += "&asof=" + asof
+		}
+		if id != "" {
+			url += "&law_id=" + neturl.QueryEscape(id)
+		}
+		if title != "" {
+			url += "&law_title=" + neturl.QueryEscape(title)
 		}
 		var p lawsPage
 		if _, err := c.getJSON(ctx, url, &p, 0); err != nil {
@@ -100,6 +153,7 @@ func appendLaws(laws []law.Law, p lawsPage) ([]law.Law, error) {
 			ID:              law.LawID(item.LawInfo.LawID),
 			Type:            item.LawInfo.Type,
 			Title:           item.RevisionInfo.LawTitle,
+			Abbrev:          item.RevisionInfo.Abbrev,
 			RevisionID:      law.RevisionID(item.RevisionInfo.LawRevisionID),
 			Updated:         item.RevisionInfo.Updated,
 			EnforcementDate: item.RevisionInfo.AmendmentEnforcementDate,

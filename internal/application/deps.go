@@ -13,6 +13,7 @@ import (
 
 // Deps 3つのユースケースが共有するport一式
 type Deps struct {
+	Scope       law.LawID
 	Catalog     LawCatalog
 	Revisions   RevisionSource
 	XML         XMLSource

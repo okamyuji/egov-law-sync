@@ -1,0 +1,72 @@
+name: law-filter
+on:
+  workflow_dispatch:
+    inputs:
+      law_id:
+        description: "法令ID。未指定なら所得税法"
+        required: false
+        default: "340AC0000000033"
+      command:
+        description: "初回はbootstrap、以降はdailyまたはweekly"
+        required: true
+        type: choice
+        options: [bootstrap, daily, weekly]
+        default: bootstrap
+permissions:
+  contents: write
+concurrency:
+  group: manifest
+  cancel-in-progress: false
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      LAW_ID: ${{ inputs.law_id }}
+      COMMAND: ${{ inputs.command }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: make build
+      - name: Sync selected law
+        id: sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          law_id="${LAW_ID:-340AC0000000033}"
+          [[ "$law_id" =~ ^[0-9A-Za-z_]+$ ]] || { echo "Invalid law ID" >&2; exit 2; }
+          [[ "$COMMAND" =~ ^(bootstrap|daily|weekly)$ ]] || exit 2
+          echo "law_id=$law_id" >> "$GITHUB_OUTPUT"
+          export EGOV_MANIFEST_DIR="manifest/scoped/$law_id"
+          tag="law-$law_id-$(date -u +%Y%m%dT%H%M%SZ)"
+          mkdir -p "bin/scoped/$law_id"
+          bin/egov-law-sync "$COMMAND" --law-id "$law_id" --release-tag "$tag" \
+            --xml-dir "bin/scoped/$law_id/xml" --text-dir "bin/scoped/$law_id/text" \
+            --zip-path "bin/scoped/$law_id/laws-xml.zip" --text-zip-path "bin/scoped/$law_id/laws-text.zip"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Publish scoped release
+        env:
+          LAW_ID: ${{ steps.sync.outputs.law_id }}
+          TAG: ${{ steps.sync.outputs.tag }}
+        run: |
+          assets=()
+          for file in "bin/scoped/$LAW_ID/laws-xml.zip" "bin/scoped/$LAW_ID/laws-text.zip"; do
+            [ ! -f "$file" ] || assets+=("$file")
+          done
+          if [ "${#assets[@]}" -gt 0 ]; then
+            gh release create "$TAG" "${assets[@]}" --title "$COMMAND $LAW_ID" --notes "出典: e-Gov法令検索（デジタル庁）"
+          fi
+      - name: Persist scoped manifest
+        env:
+          LAW_ID: ${{ steps.sync.outputs.law_id }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "manifest/scoped/$LAW_ID"
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(sync): $COMMAND $LAW_ID"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi

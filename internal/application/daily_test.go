@@ -338,3 +338,18 @@ func TestDailyRejectsUnparsableStoredDates(t *testing.T) {
 		})
 	}
 }
+
+func TestScopedDailyIgnoresOtherLawUpdates(t *testing.T) {
+	f := newFakes()
+	f.clock.now = time.Date(2026, 9, 12, 0, 0, 0, 0, law.JST)
+	f.repo.bootstrap = &RunRecord{Kind: "bootstrap", DateJST: "2026-09-11", TotalCount: 1, Applied: true}
+	f.repo.laws = []law.Law{{ID: "A", RevisionID: "A_1"}}
+	f.catalog.current = []law.Law{{ID: "A", RevisionID: "A_1"}}
+	f.updates.byDate["2026-09-11"] = []law.LawID{"A", "B"}
+	deps := f.deps()
+	deps.Scope = "A"
+	res, err := NewDailySyncer(deps).Run(context.Background(), DailyOptions{})
+	if err != nil || res.ExitCode != 0 || f.revisions.calls["B"] != 0 || f.revisions.calls["A"] != 1 {
+		t.Fatalf("result=%+v err=%v calls=%v", res, err, f.revisions.calls)
+	}
+}
