@@ -1,0 +1,14 @@
+{
+  "kind": "daily",
+  "started_at": "2026-09-27T00:26:12Z",
+  "date_jst": "2026-09-27",
+  "from": "2026-09-26",
+  "to": "2026-09-26",
+  "applied": true,
+  "total_count": 9570,
+  "counts": {
+    "unexpected": 0
+  },
+  "bytes": 0,
+  "seconds": 17.764957522
+}
