@@ -1,0 +1,15 @@
+{
+  "kind": "daily",
+  "started_at": "2026-10-01T01:12:19Z",
+  "date_jst": "2026-10-01",
+  "from": "2026-09-30",
+  "to": "2026-09-30",
+  "applied": false,
+  "total_count": 0,
+  "counts": {},
+  "anomalies": [
+    "v1_unavailable"
+  ],
+  "bytes": 0,
+  "seconds": 0.100053979
+}
