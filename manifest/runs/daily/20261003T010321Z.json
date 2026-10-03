@@ -1,0 +1,25 @@
+{
+  "kind": "daily",
+  "started_at": "2026-10-03T01:03:21Z",
+  "date_jst": "2026-10-03",
+  "from": "2026-10-02",
+  "to": "2026-10-02",
+  "applied": true,
+  "total_count": 9572,
+  "counts": {
+    "reregistered": 1,
+    "text_ok": 1,
+    "unexpected": 1,
+    "xml_ok": 1
+  },
+  "changes": [
+    {
+      "LawID": "508M60000F5A004",
+      "Kind": "reregistered",
+      "OldRevision": "508M60000F5A004_20261001_000000000000000",
+      "NewRevision": "508M60000F5A004_20261001_000000000000000"
+    }
+  ],
+  "bytes": 36501,
+  "seconds": 87.528289087
+}
