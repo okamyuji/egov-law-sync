@@ -1,0 +1,62 @@
+{
+  "kind": "daily",
+  "started_at": "2026-10-09T01:59:09Z",
+  "date_jst": "2026-10-09",
+  "from": "2026-10-08",
+  "to": "2026-10-08",
+  "applied": true,
+  "total_count": 9576,
+  "counts": {
+    "reregistered": 5,
+    "switched": 2,
+    "text_ok": 7,
+    "unexpected": 7,
+    "xml_ok": 7
+  },
+  "changes": [
+    {
+      "LawID": "344AC0000000085",
+      "Kind": "reregistered",
+      "OldRevision": "344AC0000000085_20260717_508AC0000000060",
+      "NewRevision": "344AC0000000085_20260717_508AC0000000060"
+    },
+    {
+      "LawID": "404CO0000000072",
+      "Kind": "switched",
+      "OldRevision": "404CO0000000072_20251001_507CO0000000286",
+      "NewRevision": "404CO0000000072_20261001_508CO0000000308"
+    },
+    {
+      "LawID": "413M60000800001",
+      "Kind": "switched",
+      "OldRevision": "413M60000800001_20260701_508M60000800062",
+      "NewRevision": "413M60000800001_20261001_508M60000800078"
+    },
+    {
+      "LawID": "420CO0000000389",
+      "Kind": "reregistered",
+      "OldRevision": "420CO0000000389_20261001_508CO0000000286",
+      "NewRevision": "420CO0000000389_20261001_508CO0000000286"
+    },
+    {
+      "LawID": "505M60000020002",
+      "Kind": "reregistered",
+      "OldRevision": "505M60000020002_20250401_507M60000020007",
+      "NewRevision": "505M60000020002_20250401_507M60000020007"
+    },
+    {
+      "LawID": "507AC0000000070",
+      "Kind": "reregistered",
+      "OldRevision": "507AC0000000070_20261001_000000000000000",
+      "NewRevision": "507AC0000000070_20261001_000000000000000"
+    },
+    {
+      "LawID": "507M60000110004",
+      "Kind": "reregistered",
+      "OldRevision": "507M60000110004_20251001_000000000000000",
+      "NewRevision": "507M60000110004_20251001_000000000000000"
+    }
+  ],
+  "bytes": 1374423,
+  "seconds": 33.03690112
+}
