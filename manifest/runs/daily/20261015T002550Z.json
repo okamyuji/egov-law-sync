@@ -1,0 +1,164 @@
+{
+  "kind": "daily",
+  "started_at": "2026-10-15T00:25:50Z",
+  "date_jst": "2026-10-15",
+  "from": "2026-10-14",
+  "to": "2026-10-14",
+  "applied": true,
+  "total_count": 9562,
+  "counts": {
+    "removed": 17,
+    "switched": 7,
+    "text_ok": 7,
+    "unexpected": 24,
+    "xml_ok": 7
+  },
+  "changes": [
+    {
+      "LawID": "328CO0000000386",
+      "Kind": "switched",
+      "OldRevision": "328CO0000000386_20261001_508CO0000000218",
+      "NewRevision": "328CO0000000386_20261001_508CO0000000319"
+    },
+    {
+      "LawID": "329CO0000000178",
+      "Kind": "switched",
+      "OldRevision": "329CO0000000178_20261001_508CO0000000283",
+      "NewRevision": "329CO0000000178_20261001_508CO0000000308"
+    },
+    {
+      "LawID": "330CO0000000047",
+      "Kind": "switched",
+      "OldRevision": "330CO0000000047_20260527_508CO0000000176",
+      "NewRevision": "330CO0000000047_20261001_508CO0000000314"
+    },
+    {
+      "LawID": "341CO0000000312",
+      "Kind": "switched",
+      "OldRevision": "341CO0000000312_20260401_508CO0000000049",
+      "NewRevision": "341CO0000000312_20261001_508CO0000000308"
+    },
+    {
+      "LawID": "416CO0000000356",
+      "Kind": "switched",
+      "OldRevision": "416CO0000000356_20251120_507CO0000000357",
+      "NewRevision": "416CO0000000356_20260930_508CO0000000309"
+    },
+    {
+      "LawID": "421CO0000000116",
+      "Kind": "removed",
+      "OldRevision": "421CO0000000116_20090403_000000000000000",
+      "NewRevision": ""
+    },
+    {
+      "LawID": "424M60000400046",
+      "Kind": "switched",
+      "OldRevision": "424M60000400046_20261001_508M60000400029",
+      "NewRevision": "424M60000400046_20261001_508M60000400073"
+    },
+    {
+      "LawID": "427M60000002010",
+      "Kind": "switched",
+      "OldRevision": "427M60000002010_20260401_508M60000002034",
+      "NewRevision": "427M60000002010_20261001_508M60000002089"
+    },
+    {
+      "LawID": "508CO0000000114",
+      "Kind": "removed",
+      "OldRevision": "508CO0000000114_20260403_000000000000000",
+      "NewRevision": ""
+    },
+    {
+      "LawID": "508CO0000000116",
+      "Kind": "removed",
+      "OldRevision": "508CO0000000116_20260403_000000000000000",
+      "NewRevision": ""
+    },
+    {
+      "LawID": "508CO0000000139",
+      "Kind": "removed",
+      "OldRevision": "508CO0000000139_20260410_000000000000000",
+      "NewRevision": ""
+    },
+    {
+      "LawID": "508CO0000000151",
+      "Kind": "removed",
+      "OldRevision": "508CO0000000151_20260430_000000000000000",
+      "NewRevision": ""
+    },
+    {
+      "LawID": "508CO0000000156",
+      "Kind": "removed",
+      "OldRevision": "508CO0000000156_20260507_000000000000000",
+      "NewRevision": ""
+    },
+    {
+      "LawID": "508CO0000000161",
+      "Kind": "removed",
+      "OldRevision": "508CO0000000161_20260507_000000000000000",
+      "NewRevision": ""
+    },
+    {
+      "LawID": "508CO0000000167",
+      "Kind": "removed",
+      "OldRevision": "508CO0000000167_20260520_000000000000000",
+      "NewRevision": ""
+    },
+    {
+      "LawID": "508CO0000000172",
+      "Kind": "removed",
+      "OldRevision": "508CO0000000172_20260522_000000000000000",
+      "NewRevision": ""
+    },
+    {
+      "LawID": "508CO0000000175",
+      "Kind": "removed",
+      "OldRevision": "508CO0000000175_20260522_000000000000000",
+      "NewRevision": ""
+    },
+    {
+      "LawID": "508CO0000000190",
+      "Kind": "removed",
+      "OldRevision": "508CO0000000190_20260603_000000000000000",
+      "NewRevision": ""
+    },
+    {
+      "LawID": "508CO0000000193",
+      "Kind": "removed",
+      "OldRevision": "508CO0000000193_20260605_000000000000000",
+      "NewRevision": ""
+    },
+    {
+      "LawID": "508CO0000000195",
+      "Kind": "removed",
+      "OldRevision": "508CO0000000195_20260610_000000000000000",
+      "NewRevision": ""
+    },
+    {
+      "LawID": "508CO0000000206",
+      "Kind": "removed",
+      "OldRevision": "508CO0000000206_20260624_000000000000000",
+      "NewRevision": ""
+    },
+    {
+      "LawID": "508CO0000000209",
+      "Kind": "removed",
+      "OldRevision": "508CO0000000209_20260624_000000000000000",
+      "NewRevision": ""
+    },
+    {
+      "LawID": "508CO0000000214",
+      "Kind": "removed",
+      "OldRevision": "508CO0000000214_20260625_000000000000000",
+      "NewRevision": ""
+    },
+    {
+      "LawID": "508CO0000000216",
+      "Kind": "removed",
+      "OldRevision": "508CO0000000216_20260625_000000000000000",
+      "NewRevision": ""
+    }
+  ],
+  "bytes": 3172560,
+  "seconds": 25.128287269
+}
