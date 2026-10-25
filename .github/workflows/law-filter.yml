@@ -32,7 +32,8 @@ jobs:
           ref: main
       - uses: actions/setup-go@v6
         with:
-          go-version-file: go.mod
+          go-version: "1.27.x"
+          check-latest: true
       - run: make build
       - name: Sync selected law
         id: sync
