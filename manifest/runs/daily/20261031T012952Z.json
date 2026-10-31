@@ -1,0 +1,25 @@
+{
+  "kind": "daily",
+  "started_at": "2026-10-31T01:29:52Z",
+  "date_jst": "2026-10-31",
+  "from": "2026-10-30",
+  "to": "2026-10-30",
+  "applied": true,
+  "total_count": 9567,
+  "counts": {
+    "switched": 1,
+    "text_ok": 1,
+    "unexpected": 0,
+    "xml_ok": 1
+  },
+  "changes": [
+    {
+      "LawID": "419AC1000000051",
+      "Kind": "switched",
+      "OldRevision": "419AC1000000051_20261024_508AC0000000066",
+      "NewRevision": "419AC1000000051_20261031_508AC1000000073"
+    }
+  ],
+  "bytes": 358452,
+  "seconds": 13.392464746
+}
