@@ -1,0 +1,38 @@
+{
+  "kind": "daily",
+  "started_at": "2026-11-10T04:02:07Z",
+  "date_jst": "2026-11-10",
+  "from": "2026-11-09",
+  "to": "2026-11-09",
+  "applied": true,
+  "total_count": 9570,
+  "counts": {
+    "added": 2,
+    "switched": 1,
+    "text_ok": 3,
+    "unexpected": 3,
+    "xml_ok": 3
+  },
+  "changes": [
+    {
+      "LawID": "508CO0000000224",
+      "Kind": "switched",
+      "OldRevision": "508CO0000000224_20260709_000000000000000",
+      "NewRevision": "508CO0000000224_20261031_508CO0000000340"
+    },
+    {
+      "LawID": "508CO0000000335",
+      "Kind": "added",
+      "OldRevision": "",
+      "NewRevision": "508CO0000000335_20261030_000000000000000"
+    },
+    {
+      "LawID": "508CO0000000342",
+      "Kind": "added",
+      "OldRevision": "",
+      "NewRevision": "508CO0000000342_20261030_000000000000000"
+    }
+  ],
+  "bytes": 42875,
+  "seconds": 12.583358522
+}
