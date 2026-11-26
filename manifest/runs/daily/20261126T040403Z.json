@@ -1,0 +1,75 @@
+{
+  "kind": "daily",
+  "started_at": "2026-11-26T04:04:03Z",
+  "date_jst": "2026-11-26",
+  "from": "2026-11-25",
+  "to": "2026-11-25",
+  "applied": true,
+  "total_count": 9579,
+  "counts": {
+    "added": 1,
+    "reregistered": 2,
+    "switched": 6,
+    "text_ok": 9,
+    "unexpected": 6,
+    "xml_ok": 9
+  },
+  "changes": [
+    {
+      "LawID": "322M30000040046",
+      "Kind": "reregistered",
+      "OldRevision": "322M30000040046_20010106_412M50000040069",
+      "NewRevision": "322M30000040046_20010106_412M50000040069"
+    },
+    {
+      "LawID": "327M50010000079",
+      "Kind": "switched",
+      "OldRevision": "327M50010000079_20261109_508M60000200074",
+      "NewRevision": "327M50010000079_20261126_508M60000200074"
+    },
+    {
+      "LawID": "332AC0000000026",
+      "Kind": "switched",
+      "OldRevision": "332AC0000000026_20261101_507AC0000000013",
+      "NewRevision": "332AC0000000026_20261126_508AC0000000012"
+    },
+    {
+      "LawID": "332CO0000000043",
+      "Kind": "reregistered",
+      "OldRevision": "332CO0000000043_20261124_508CO0000000098",
+      "NewRevision": "332CO0000000043_20261124_508CO0000000098"
+    },
+    {
+      "LawID": "332M50000040015",
+      "Kind": "switched",
+      "OldRevision": "332M50000040015_20261101_507M60000040026",
+      "NewRevision": "332M50000040015_20261126_508M60000040021"
+    },
+    {
+      "LawID": "333M50000100053",
+      "Kind": "switched",
+      "OldRevision": "333M50000100053_20261001_508M60000100144",
+      "NewRevision": "333M50000100053_20261112_508M60000100153"
+    },
+    {
+      "LawID": "411M50000100036",
+      "Kind": "switched",
+      "OldRevision": "411M50000100036_20261001_508M60000100144",
+      "NewRevision": "411M50000100036_20261112_508M60000100153"
+    },
+    {
+      "LawID": "419M60000100129",
+      "Kind": "switched",
+      "OldRevision": "419M60000100129_20261001_508M60000100144",
+      "NewRevision": "419M60000100129_20261112_508M60000100153"
+    },
+    {
+      "LawID": "508CO0000000351",
+      "Kind": "added",
+      "OldRevision": "",
+      "NewRevision": "508CO0000000351_20261118_000000000000000"
+    }
+  ],
+  "bytes": 40135958,
+  "seconds": 24.365107549
+}
